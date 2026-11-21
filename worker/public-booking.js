@@ -1,0 +1,13 @@
+const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
+const validName=value=>typeof value==='string'&&value.trim().length>0&&value.trim().length<=80;
+export async function onPublicBooking(request,env){
+ if(request.method!=='POST')return new Response('Method not allowed.',{status:405,headers:{Allow:'POST'}});
+ let data;try{data=await request.json()}catch{return json({error:'Enter a valid booking request.'},400)}
+ if(typeof data?.website==='string'&&data.website.trim())return json({received:true},202);
+ const name=String(data?.name||'').trim(),email=String(data?.email||'').trim().toLowerCase(),phone=String(data?.phone||'').trim(),service=String(data?.service||'').trim(),date=String(data?.preferred_date||'').trim(),note=String(data?.note||'').trim();
+ if(!validName(name)||!email||email.length>254||!/^\S+@\S+\.\S+$/.test(email)||phone.length>30||!validName(service)||service.length>120||note.length>1000||!/^(?:[0-9]{4}-[0-9]{2}-[0-9]{2})$/.test(date)||Number.isNaN(Date.parse(`${date}T00:00:00Z`))||date<new Date().toISOString().slice(0,10)||date>new Date(Date.now()+366*86400000).toISOString().slice(0,10))return json({error:'Enter your name, valid email, service, and a preferred date within the next year.'},400);
+ const origin=request.headers.get('Origin');if(origin&&origin!=='https://elitequoteflow.com'&&origin!=='https://www.elitequoteflow.com')return json({error:'Origin not allowed.'},403);
+ if(env.BOOKING_RATE_LIMITER?.limit){const result=await env.BOOKING_RATE_LIMITER.limit({key:request.headers.get('CF-Connecting-IP')||'unknown'});if(!result.success)return json({error:'Please wait before submitting another request.'},429)}
+ if(!env.SUPABASE_URL?.trim()||!env.SUPABASE_ANON_KEY?.trim())return json({error:'Booking requests are temporarily unavailable.'},503);
+ try{const key=env.SUPABASE_ANON_KEY.trim();const response=await fetch(`${env.SUPABASE_URL.trim().replace(/\/$/,'')}/rest/v1/rpc/submit_public_booking_request`,{method:'POST',headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({p_customer_name:name,p_customer_email:email,p_phone:phone,p_service:service,p_preferred_date:date,p_customer_note:note})});if(!response.ok)throw new Error(`Booking RPC returned ${response.status}.`);const result=await response.json();if(!result?.received)return json({error:'This booking request could not be accepted.'},400);return json({received:true,message:'Your request was sent. The business will contact you to confirm availability.'},201)}catch(error){console.error('Public booking submission failed:',error.message);return json({error:'Could not send your request right now. Please try again later.'},503)}
+}
