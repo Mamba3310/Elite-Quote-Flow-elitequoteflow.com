@@ -5,6 +5,10 @@ import { onPublicQuoteRequest } from './public-quote.js';
 import { onAnalyticsRequest } from './site-analytics.js';
 import { runScheduled } from './scheduled.js';
 import { onDepositCheckout } from './deposit-checkout.js';
+import { onInvoiceCheckout } from './invoice-checkout.js';
+import { onSendQuoteEmail } from './send-quote-email.js';
+import { onTeamsRequest } from './teams.js';
+import { onReferralsRequest } from './referrals.js';
 import { onSupportChat } from './support-chat.js';
 import { onCustomerReview } from './customer-reviews.js';
 import { adminPage, onAdminApi } from './admin.js';
@@ -50,6 +54,20 @@ export default {
     if (url.pathname === '/api/deposit-checkout') {
       if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
       return onDepositCheckout(request, env);
+    }
+    if (url.pathname === '/api/invoice-checkout') {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
+      return onInvoiceCheckout(request, env);
+    }
+    if (url.pathname === '/api/send-quote-email') {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
+      return onSendQuoteEmail(request, env);
+    }
+    if (url.pathname === '/api/teams' || url.pathname === '/api/teams/accept') {
+      return onTeamsRequest(request, env);
+    }
+    if (url.pathname === '/api/referrals') {
+      return onReferralsRequest(request, env);
     }
     if (url.pathname === '/api/create-checkout-session' || url.pathname === '/api/create-monthly-checkout-session') {
       if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
