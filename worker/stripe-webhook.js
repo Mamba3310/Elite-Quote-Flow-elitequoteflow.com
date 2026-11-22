@@ -4,6 +4,7 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 });
 
 import Stripe from 'stripe';
+import { creditReferrerOnProActivation } from './referrals.js';
 
 const supabaseBase = env => env.SUPABASE_URL.trim().replace(/\/$/, '');
 const serviceRoleKey = env => env.SUPABASE_SERVICE_ROLE_KEY.trim();
@@ -73,6 +74,10 @@ async function setProStatus(env, userId, isPro, customerId, subscriptionId, stat
       updated_at: new Date().toISOString()
     })
   });
+  if (response.ok && isPro) {
+    try { await creditReferrerOnProActivation(env, userId); }
+    catch (error) { console.error('Referral credit failed after Pro activation', error?.message || String(error)); }
+  }
   if (!response.ok) {
     const errorText = await response.text();
     let errorBody;
@@ -164,6 +169,32 @@ export async function onRequestPost({ request, env }) {
       const userId = await resolveCheckoutUserId(env, object);
       const subscriptionId = typeof object.subscription === 'string' ? object.subscription : object.subscription?.id;
       await setProStatus(env, userId, true, object.customer, subscriptionId, 'active');
+    } else if (event.type === 'checkout.session.completed' && object.mode === 'payment' && object.payment_status === 'paid' && object.metadata?.quote_id && object.metadata?.payment_type === 'invoice_balance') {
+      const quoteId = object.metadata.quote_id;
+      const base = supabaseBase(env);
+      const key = serviceRoleKey(env);
+      const sessionId = typeof object.id === 'string' ? object.id : '';
+      const payment = await fetch(`${base}/rest/v1/quotes?id=eq.${encodeURIComponent(quoteId)}&select=id,user_id,invoice_paid_at,stripe_invoice_checkout_session_id,invoice_status`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` }
+      });
+      if (!payment.ok) throw new Error('Invoice quote lookup failed.');
+      const quotes = await payment.json();
+      const quote = quotes.find(row => row.user_id === object.metadata.supabase_user_id);
+      if (!quote || !sessionId) throw new Error('Invoice quote owner or Checkout Session could not be verified.');
+      if (quote.invoice_paid_at || (quote.stripe_invoice_checkout_session_id && quote.stripe_invoice_checkout_session_id !== sessionId)) {
+        console.log('Ignoring already processed or superseded invoice Checkout Session', sessionId);
+      } else {
+        const update = await fetch(`${base}/rest/v1/quotes?id=eq.${encodeURIComponent(quoteId)}&user_id=eq.${encodeURIComponent(quote.user_id)}`, {
+          method: 'PATCH', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+          body: JSON.stringify({
+            invoice_paid_at: new Date().toISOString(),
+            invoice_status: 'paid',
+            stripe_invoice_checkout_session_id: sessionId,
+            updated_at: new Date().toISOString()
+          })
+        });
+        if (!update.ok) throw new Error('Invoice payment update failed.');
+      }
     } else if (event.type === 'checkout.session.completed' && object.mode === 'payment' && object.payment_status === 'paid' && object.metadata?.quote_id) {
       const quoteId = object.metadata.quote_id;
       const base = supabaseBase(env);

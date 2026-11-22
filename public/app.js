@@ -3,8 +3,20 @@
 
   const STORAGE_KEY = 'quoteflow.quotes.v1';
   const CALCULATOR_CURRENCY_KEY = 'calculator-currency';
+  const FREE_OPEN_QUOTE_LIMIT = 15;
+  const FREE_LINE_ITEM_LIMIT = 1;
+  const PRO_LINE_ITEM_LIMIT = 20;
   const SUPABASE_CONFIG = window.QUOTEFlow_SUPABASE_CONFIG;
   const CURRENCIES = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD', 'NZD', 'CHF', 'JPY', 'CNY', 'INR', 'MXN', 'BRL', 'ZAR', 'SGD', 'HKD', 'SEK', 'NOK', 'DKK', 'PLN'];
+  const isPro = () => Boolean(profile.isPro);
+  const openQuoteCount = () => quotes.filter(quote => quote.status === 'sent').length;
+  const lineItemLimit = () => (isPro() ? PRO_LINE_ITEM_LIMIT : FREE_LINE_ITEM_LIMIT);
+  const requirePro = (feature) => {
+    if (isPro()) return true;
+    showToast(`${feature} is included with Pro. Upgrade from your Pro Desk to unlock it.`, 6000);
+    $('#upgrade-strip')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  };
   const currencyOptions = CURRENCIES.map(code => `<option value="${code}">${code}</option>`).join('');
   function formatMoney(amount, currency = 'USD') {
     const code = CURRENCIES.includes(currency) ? currency : 'USD';
@@ -51,9 +63,11 @@
   const invoiceForm = $('#invoice-form');
   const lineItemsContainer = $('#quote-line-items');
   const emptyState = $('#empty-state');
-  let profile = { fullName: '', businessName: '', phone: '', companyLogoUrl: '', brandColor: '#426DDE', companyAddress: '', taxId: '', isLifetime: false };
+  let profile = { fullName: '', businessName: '', phone: '', companyLogoUrl: '', brandColor: '#426DDE', companyAddress: '', taxId: '', isLifetime: false, referralCode: '', referralCreditsMonths: 0 };
   let quotes = [];
   let templates = [];
+  let teamState = { team: null, members: [], pendingInvites: [] };
+  let referralState = null;
   let invoiceQuoteId = null;
   let supabaseClient = null;
   let currentUser = null;
@@ -177,9 +191,10 @@
     const avatar = name.trim().split(/\\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() || 'Q';
     $('#upgrade-strip').classList.toggle('is-pro-active', Boolean(profile.isPro));
     $('#pro-upgrade-title').textContent = profile.isPro ? 'Your Pro Desk is active.' : 'Unlock your Pro Desk.';
+    const openCount = openQuoteCount();
     $('#pro-upgrade-copy').textContent = profile.isPro
       ? profile.isLifetime ? 'Your one-time purchase gives you permanent access to all Pro tools.' : 'Your Pro tools are ready. Manage billing or cancel your subscription securely.'
-      : 'Choose $14.99 per month or $149.99 once for lifetime access to Pro.';
+      : `Free includes ${FREE_OPEN_QUOTE_LIMIT} open quotes and core follow-ups. Pro adds deposits, branded email, reminders, multi-item quotes, AI drafting, exports, teams, and invoice collection · $14.99/mo or $149.99 lifetime. You have ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes.`;
     const monthlyButton = $('#upgrade-monthly-link');
     const lifetimeButton = $('#upgrade-lifetime-link');
     const manageButton = $('#upgrade-pro-link');
@@ -192,17 +207,31 @@
     if (profile.isLifetime) lifetimeButton.setAttribute('aria-disabled', 'true');
     else lifetimeButton.removeAttribute('aria-disabled');
     document.querySelectorAll('.pro-feature').forEach(button => { button.hidden = !profile.isPro; });
+    document.querySelectorAll('.pro-only-field').forEach(field => {
+      field.classList.toggle('is-locked', !profile.isPro);
+      field.querySelectorAll('input,select,textarea,button').forEach(control => {
+        if (control.dataset.keepEnabled === 'true') return;
+        control.disabled = !profile.isPro;
+      });
+    });
+    const freeLimitNote = $('#free-limit-note');
+    if (freeLimitNote) {
+      freeLimitNote.hidden = Boolean(profile.isPro);
+      freeLimitNote.textContent = `Free plan: ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes · 1 line item · mailto send. Upgrade for deposits, reminders, branding, and more.`;
+    }
     $('#header-profile-name').textContent = name;
     $('#header-profile-name').title = name;
     $('#header-profile-avatar').textContent = avatar;
+    renderTeamPanel();
+    renderReferralPanel();
   }
 
   async function fetchProfile() {
     if (!currentUser) return;
-    let { data, error } = await supabaseClient.from('profiles').select('full_name, business_name, phone, is_pro, stripe_subscription_status, company_logo_url, brand_color, company_address, tax_id').eq('id', currentUser.id).maybeSingle();
-    if (error && /tax_id|column .* does not exist|schema cache/i.test(error.message || '')) {
+    let { data, error } = await supabaseClient.from('profiles').select('full_name, business_name, phone, is_pro, stripe_subscription_status, company_logo_url, brand_color, company_address, tax_id, referral_code, referral_credits_months').eq('id', currentUser.id).maybeSingle();
+    if (error && /tax_id|referral_code|referral_credits|column .* does not exist|schema cache/i.test(error.message || '')) {
       const legacy = await supabaseClient.from('profiles').select('full_name, business_name, phone, is_pro, stripe_subscription_status, company_logo_url, brand_color, company_address').eq('id', currentUser.id).maybeSingle();
-      data = legacy.data ? { ...legacy.data, tax_id: currentUser.user_metadata?.tax_id || '' } : null;
+      data = legacy.data ? { ...legacy.data, tax_id: currentUser.user_metadata?.tax_id || '', referral_code: '', referral_credits_months: 0 } : null;
       error = legacy.error;
     }
     if (error) throw error;
@@ -225,9 +254,75 @@
       companyLogoUrl: data?.company_logo_url || '',
       brandColor: data?.brand_color || '#426DDE',
       companyAddress: data?.company_address || '',
-      taxId: data?.tax_id || currentUser.user_metadata?.tax_id || ''
+      taxId: data?.tax_id || currentUser.user_metadata?.tax_id || '',
+      referralCode: data?.referral_code || '',
+      referralCreditsMonths: Number(data?.referral_credits_months || 0)
     };
     renderProfile();
+    loadGrowthExtras().catch(() => {});
+  }
+
+  async function authHeaders() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` };
+  }
+
+  async function loadGrowthExtras() {
+    if (!currentUser) return;
+    try {
+      const headers = await authHeaders();
+      const [teamsResponse, referralsResponse] = await Promise.all([
+        fetch('/api/teams', { headers }),
+        fetch('/api/referrals', { headers })
+      ]);
+      if (teamsResponse.ok) teamState = await teamsResponse.json();
+      if (referralsResponse.ok) {
+        referralState = await referralsResponse.json();
+        profile.referralCode = referralState.referralCode || profile.referralCode;
+        profile.referralCreditsMonths = Number(referralState.creditsMonths || 0);
+      }
+      renderTeamPanel();
+      renderReferralPanel();
+    } catch (error) {
+      console.warn('Could not load teams/referrals', error);
+    }
+  }
+
+  function renderTeamPanel() {
+    const list = $('#team-members-list');
+    const invites = $('#team-pending-invites');
+    if (!list) return;
+    if (!isPro()) {
+      list.innerHTML = '<p>Upgrade to Pro to invite teammates and share your quote desk.</p>';
+      if (invites) invites.innerHTML = '';
+      return;
+    }
+    const members = teamState.members || [];
+    list.innerHTML = members.length
+      ? members.map(member => `<div class="growth-list-item"><span>${escapeHTML(member.invited_email)} · ${escapeHTML(member.role)} · ${escapeHTML(member.invitation_status)}</span>${member.invitation_status === 'pending' || member.invitation_status === 'accepted' ? `<button type="button" class="button button-secondary button-small team-revoke" data-member-id="${escapeHTML(member.id)}">Revoke</button>` : ''}</div>`).join('')
+      : '<p>No teammates yet. Invite someone by email.</p>';
+    if (invites) {
+      const pending = teamState.pendingInvites || [];
+      invites.innerHTML = pending.length
+        ? pending.map(invite => `<div class="growth-list-item"><span>Invitation to join a team</span><button type="button" class="button button-primary button-small team-accept" data-invite-id="${escapeHTML(invite.id)}">Accept</button></div>`).join('')
+        : '<p>No pending invitations for your email.</p>';
+    }
+  }
+
+  function renderReferralPanel() {
+    const panel = $('#referral-panel');
+    if (!panel) return;
+    const code = referralState?.referralCode || profile.referralCode || 'Loading…';
+    const link = referralState?.referralLink || (code && code !== 'Loading…' ? `${window.location.origin}/?ref=${encodeURIComponent(code)}` : '');
+    const credits = referralState?.creditsMonths ?? profile.referralCreditsMonths ?? 0;
+    $('#referral-code-value').textContent = code;
+    $('#referral-link-value').textContent = link || '—';
+    $('#referral-credits-value').textContent = `${credits} month${credits === 1 ? '' : 's'} of Pro credit earned`;
+    const applied = $('#referral-applied-note');
+    if (applied) {
+      applied.hidden = !referralState?.referredByCode;
+      applied.textContent = referralState?.referredByCode ? `Linked referral: ${referralState.referredByCode}` : '';
+    }
   }
 
   function openProfileDialog() {
@@ -248,6 +343,12 @@
   }
 
   async function saveProfile(values) {
+    if (!isPro()) {
+      values.companyLogoUrl = profile.companyLogoUrl || '';
+      values.brandColor = profile.brandColor || '#426DDE';
+      values.companyAddress = profile.companyAddress || '';
+      values.taxId = profile.taxId || '';
+    }
     const nextEmail = values.email.trim();
     const { data: authData, error: authError } = await supabaseClient.auth.updateUser({
       data: {
@@ -308,8 +409,10 @@
       depositPercent: Number(row.deposit_percent || 0),
       viewCount: Number(row.view_count || 0),
       acceptedAt: row.accepted_at || '',
+      acceptedByName: row.accepted_by_name || '',
       rejectedReason: row.rejected_reason || '',
       stripePaymentUrl: row.stripe_payment_url || '',
+      depositPaidAt: row.deposit_paid_at || '',
       followUp: row.follow_up,
       status: row.status,
       note: row.note || '',
@@ -459,7 +562,15 @@
   function renderInvoices() {
     const invoiced = quotes.filter(quote => quote.status === 'won');
     $('#invoice-empty').hidden = invoiced.length > 0;
-    $('#invoice-rows').innerHTML = invoiced.map(quote => `<tr><td>${escapeHTML(quote.invoiceNumber || 'Draft')}</td><td>${escapeHTML(quote.customer)}</td><td>${formatMoney(quote.amount, quote.currency)}</td><td>${escapeHTML(quote.invoiceDueDate ? shortDate(quote.invoiceDueDate) : '—')}</td><td><span class="invoice-status invoice-${escapeHTML(quote.invoiceStatus || 'not_invoiced')}">${quote.invoiceStatus === 'paid' ? 'Paid' : quote.invoiceStatus === 'unpaid' ? 'Unpaid' : 'Not invoiced'}</span></td><td><button class="button button-secondary button-small invoice-edit" data-invoice-id="${escapeHTML(quote.id)}">${quote.invoiceStatus && quote.invoiceStatus !== 'not_invoiced' ? 'Update' : 'Record invoice'}</button></td></tr>`).join('');
+    $('#invoice-rows').innerHTML = invoiced.map(quote => {
+      const paid = quote.invoiceStatus === 'paid' || quote.invoicePaidAt;
+      const collect = !paid && isPro()
+        ? `<button class="button button-primary button-small invoice-collect" data-collect-id="${escapeHTML(quote.id)}">Collect balance</button>`
+        : !paid
+          ? `<button class="button button-secondary button-small" type="button" data-pro-upsell="invoice">Pro to collect</button>`
+          : '';
+      return `<tr><td>${escapeHTML(quote.invoiceNumber || 'Draft')}</td><td>${escapeHTML(quote.customer)}</td><td>${formatMoney(quote.amount, quote.currency)}</td><td>${escapeHTML(quote.invoiceDueDate ? shortDate(quote.invoiceDueDate) : '—')}</td><td><span class="invoice-status invoice-${escapeHTML(quote.invoiceStatus || 'not_invoiced')}">${paid ? 'Paid' : quote.invoiceStatus === 'unpaid' ? 'Unpaid' : 'Not invoiced'}</span></td><td class="invoice-actions"><button class="button button-secondary button-small invoice-edit" data-invoice-id="${escapeHTML(quote.id)}">${quote.invoiceStatus && quote.invoiceStatus !== 'not_invoiced' ? 'Update' : 'Record invoice'}</button>${collect}</td></tr>`;
+    }).join('');
   }
 
   async function makeQuoteShareable(quote) {
@@ -469,14 +580,18 @@
     }
     const link = `${window.location.origin}/q/${quote.publicToken}`;
     if (quote.depositPercent > 0 && !quote.stripePaymentUrl) {
-      try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        const response = await fetch('/api/deposit-checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` }, body: JSON.stringify({ quoteId: quote.id, publicToken: quote.publicToken }) });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Could not prepare the deposit payment link.');
-        quote.stripePaymentUrl = result.url;
-        await saveCloudQuote(quote);
-      } catch (error) { showToast(`Quote saved; deposit link could not be created: ${error.message}`); }
+      if (!isPro()) {
+        showToast('Deposit links are a Pro feature. Your quote link was copied without a deposit checkout.');
+      } else {
+        try {
+          const headers = await authHeaders();
+          const response = await fetch('/api/deposit-checkout', { method: 'POST', headers, body: JSON.stringify({ quoteId: quote.id, publicToken: quote.publicToken }) });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Could not prepare the deposit payment link.');
+          quote.stripePaymentUrl = result.url;
+          await saveCloudQuote(quote);
+        } catch (error) { showToast(`Quote saved; deposit link could not be created: ${error.message}`); }
+      }
     }
     try { await navigator.clipboard.writeText(link); showToast('Customer quote link copied. Paste it into an email or text.'); }
     catch { window.prompt('Copy this customer quote link:', link); }
@@ -485,11 +600,21 @@
   function printQuoteProposal(quote) {
     const money = value => formatMoney(value, quote.currency || 'USD');
     const rows = (quote.lineItems || []).map(item => `<tr><td>${escapeHTML(item.description || '')}</td><td>${escapeHTML(item.quantity ?? 1)}</td><td>${escapeHTML(money(item.unit_price || 0))}</td><td>${escapeHTML(money(item.total || 0))}</td></tr>`).join('');
-    const brandColor = /^#[\da-f]{6}$/i.test(profile.brandColor || '') ? profile.brandColor : '#426DDE';
+    const brandColor = isPro() && /^#[\da-f]{6}$/i.test(profile.brandColor || '') ? profile.brandColor : '#426DDE';
+    const subtotal = Number(quote.subtotalAmount ?? quote.amount) || 0;
+    const discount = Number(quote.discountAmount || 0);
+    const taxRate = Number(quote.taxRate || 0);
+    const taxAmount = Math.max(0, (subtotal - discount) * taxRate / 100);
+    const depositPercent = Number(quote.depositPercent || 0);
+    const depositAmount = Math.max(0, Number(quote.amount || 0) * depositPercent / 100);
+    const logo = isPro() && profile.companyLogoUrl ? `<img src="${escapeHTML(profile.companyLogoUrl)}" alt="" style="max-height:56px;max-width:180px;object-fit:contain;margin-bottom:10px">` : '';
+    const signature = quote.acceptedAt
+      ? `<section class="signature"><h3>Acceptance record</h3><p>Accepted ${escapeHTML(shortDate(quote.acceptedAt))}${quote.acceptedByName ? ` by ${escapeHTML(quote.acceptedByName)}` : ''}.</p></section>`
+      : '';
     const proposal = window.open('', '_blank', 'width=900,height=900');
     if (!proposal) return showToast('Allow pop-ups to print or save this quote as PDF.');
     proposal.opener = null;
-    proposal.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quote · ${escapeHTML(quote.customer)}</title><style>body{max-width:780px;margin:40px auto;padding:28px;color:#172033;font:15px/1.6 Arial,sans-serif}header{padding-bottom:18px;border-bottom:3px solid ${brandColor}}h1{margin:28px 0 4px;font-size:30px}small,.muted{color:#667085}.amount{font-size:30px;font-weight:700;color:${brandColor}}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{padding:10px;border-bottom:1px solid #d9dee8;text-align:left}.terms{white-space:pre-wrap;border-top:1px solid #d9dee8;padding-top:18px}@media print{body{margin:0 auto;padding:12px}button{display:none}}</style></head><body><header><strong>${escapeHTML(profile.businessName || 'Elite Quote Flow')}</strong>${profile.companyAddress ? `<div>${escapeHTML(profile.companyAddress)}</div>` : ''}</header><h1>Service proposal</h1><p class="muted">Prepared for ${escapeHTML(quote.customer)} · ${escapeHTML(shortDate(quote.createdAt || new Date().toISOString()))}</p><h2>${escapeHTML(quote.service)}</h2>${rows ? `<table><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>` : ''}<p class="amount">${escapeHTML(money(quote.amount))}</p>${quote.expiresAt ? `<p>Valid through ${escapeHTML(shortDate(quote.expiresAt))}</p>` : ''}${quote.quoteTerms ? `<section class="terms">${escapeHTML(quote.quoteTerms)}</section>` : ''}<p class="muted">Prepared with Elite Quote Flow</p><script>window.addEventListener('load',()=>window.print())<\/script></body></html>`);
+    proposal.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quote · ${escapeHTML(quote.customer)}</title><style>body{max-width:780px;margin:40px auto;padding:28px;color:#172033;font:15px/1.55 Georgia,'Times New Roman',serif}header{display:flex;justify-content:space-between;gap:18px;padding-bottom:18px;border-bottom:3px solid ${brandColor}}.brand strong{display:block;font:700 20px/1.2 'Trebuchet MS',sans-serif;color:${brandColor}}h1{margin:28px 0 4px;font:700 32px/1.15 'Trebuchet MS',sans-serif}.muted{color:#667085}.amount{font:700 34px/1 'Trebuchet MS',sans-serif;color:${brandColor}}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{padding:10px;border-bottom:1px solid #d9dee8;text-align:left}th{font:700 12px/1.2 'Trebuchet MS',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#526074}.totals{width:min(320px,100%);margin-left:auto}.totals div{display:flex;justify-content:space-between;gap:18px;padding:6px 0}.terms,.signature{white-space:pre-wrap;border-top:1px solid #d9dee8;padding-top:18px;margin-top:24px}@media print{body{margin:0 auto;padding:12px}button{display:none}}</style></head><body><header><div class="brand">${logo}<strong>${escapeHTML(profile.businessName || 'Elite Quote Flow')}</strong>${profile.companyAddress ? `<div class="muted">${escapeHTML(profile.companyAddress)}</div>` : ''}${profile.taxId ? `<div class="muted">Tax ID: ${escapeHTML(profile.taxId)}</div>` : ''}</div><div class="muted">Prepared ${escapeHTML(shortDate(quote.createdAt || new Date().toISOString()))}${quote.expiresAt ? `<br>Valid through ${escapeHTML(shortDate(quote.expiresAt))}` : ''}</div></header><h1>Service proposal</h1><p class="muted">Prepared for ${escapeHTML(quote.customer)}</p><h2>${escapeHTML(quote.service)}</h2>${rows ? `<table><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>` : ''}<div class="totals"><div><span>Subtotal</span><strong>${escapeHTML(money(subtotal))}</strong></div>${discount ? `<div><span>Discount</span><strong>-${escapeHTML(money(discount))}</strong></div>` : ''}${taxRate ? `<div><span>Tax (${escapeHTML(String(taxRate))}%)</span><strong>${escapeHTML(money(taxAmount))}</strong></div>` : ''}<div><span>Total</span><strong class="amount">${escapeHTML(money(quote.amount))}</strong></div>${depositPercent ? `<div><span>Deposit (${escapeHTML(String(depositPercent))}%)</span><strong>${escapeHTML(money(depositAmount))}</strong></div>` : ''}</div>${quote.quoteTerms ? `<section class="terms"><h3>Scope and terms</h3>${escapeHTML(quote.quoteTerms)}</section>` : ''}${signature}<p class="muted">Prepared with Elite Quote Flow</p><script>window.addEventListener('load',()=>window.print())<\/script></body></html>`);
     proposal.document.close();
   }
 
@@ -1127,7 +1252,9 @@
     const button = $('#enable-reminders-button');
     if (permission === 'granted') {
       button.textContent = 'Reminders enabled';
-      showToast('Browser reminders enabled. Keep Elite Quote Flow open to receive follow-up alerts.');
+      showToast(isPro()
+        ? 'Browser reminders enabled. Pro also emails customers automatically on follow-up dates when Resend is configured.'
+        : 'Browser reminders enabled. Automated customer email reminders are included with Pro.');
       checkReminders();
     } else {
       button.textContent = 'Reminders blocked';
@@ -1204,7 +1331,10 @@
   $('#upgrade-lifetime-link').addEventListener('click', event => startBillingAction(event.currentTarget, '/api/create-checkout-session', { plan: 'lifetime' }));
   $('#upgrade-pro-link').addEventListener('click', event => startBillingAction(event.currentTarget, '/api/create-portal-session', {}));
   $('#invite-button').addEventListener('click', async () => {
-    const inviteUrl = window.location.origin;
+    if (!referralState?.referralLink) {
+      try { await loadGrowthExtras(); } catch { /* ignore */ }
+    }
+    const inviteUrl = referralState?.referralLink || window.location.origin;
     const title = 'Try Elite Quote Flow for your business';
     const text = 'I use Elite Quote Flow to keep customer quotes and follow-ups organized. Check it out:';
     if (navigator.share) {
@@ -1217,6 +1347,65 @@
     }
     const body = `${text} ${inviteUrl}`;
     window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  });
+  $('#team-invite-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!requirePro('Team invites')) return;
+    const email = $('#team-invite-email')?.value.trim().toLowerCase();
+    if (!email) return showToast('Enter a teammate email.');
+    try {
+      const headers = await authHeaders();
+      const response = await fetch('/api/teams', { method: 'POST', headers, body: JSON.stringify({ email, role: $('#team-invite-role')?.value || 'member' }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not invite teammate.');
+      $('#team-invite-email').value = '';
+      await loadGrowthExtras();
+      showToast(`Invitation sent to ${email}.`);
+    } catch (error) { showToast(error.message, 6000); }
+  });
+  $('#team-members-list')?.addEventListener('click', async event => {
+    const button = event.target.closest('.team-revoke');
+    if (!button) return;
+    if (!requirePro('Team management')) return;
+    try {
+      const headers = await authHeaders();
+      const response = await fetch('/api/teams', { method: 'PATCH', headers, body: JSON.stringify({ memberId: button.dataset.memberId, status: 'revoked' }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not revoke teammate.');
+      await loadGrowthExtras();
+      showToast('Teammate access revoked.');
+    } catch (error) { showToast(error.message, 6000); }
+  });
+  $('#team-pending-invites')?.addEventListener('click', async event => {
+    const button = event.target.closest('.team-accept');
+    if (!button) return;
+    try {
+      const headers = await authHeaders();
+      const response = await fetch('/api/teams/accept', { method: 'POST', headers, body: JSON.stringify({ inviteId: button.dataset.inviteId }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not accept invitation.');
+      await loadGrowthExtras();
+      showToast('Team invitation accepted.');
+    } catch (error) { showToast(error.message, 6000); }
+  });
+  $('#copy-referral-link')?.addEventListener('click', async () => {
+    const link = referralState?.referralLink || $('#referral-link-value')?.textContent;
+    if (!link || link === '—') return showToast('Referral link is not ready yet.');
+    try { await navigator.clipboard.writeText(link); showToast('Referral link copied.'); }
+    catch { window.prompt('Copy your referral link:', link); }
+  });
+  $('#apply-referral-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const code = $('#apply-referral-code')?.value.trim().toUpperCase();
+    if (!code) return showToast('Enter a referral code.');
+    try {
+      const headers = await authHeaders();
+      const response = await fetch('/api/referrals', { method: 'POST', headers, body: JSON.stringify({ code }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not apply referral code.');
+      await loadGrowthExtras();
+      showToast('Referral code linked. When you upgrade to Pro, your referrer earns a credit month.');
+    } catch (error) { showToast(error.message, 6000); }
   });
   document.querySelectorAll('.filter-tab').forEach(tab => tab.addEventListener('click', () => setFilter(tab.dataset.filter)));
   document.querySelectorAll('[data-nav-filter]').forEach(link => link.addEventListener('click', () => setFilter(link.dataset.navFilter)));
@@ -1254,7 +1443,10 @@
   });
   $('#add-quote-line-item').addEventListener('click', () => {
     const current = [...lineItemsContainer.querySelectorAll('.quote-line-item')].map(row => ({ description: row.querySelector('[name="lineDescription"]').value, quantity: row.querySelector('[name="lineQuantity"]').value, unit_price: row.querySelector('[name="lineUnitPrice"]').value }));
-    if (current.length >= 20) return showToast('A quote can contain up to 20 items.');
+    if (current.length >= lineItemLimit()) {
+      if (!isPro()) return requirePro('Multiple quote line items');
+      return showToast(`A quote can contain up to ${PRO_LINE_ITEM_LIMIT} items.`);
+    }
     current.push({ description: '', quantity: 1, unit_price: '' }); renderLineItemFields(current);
     lineItemsContainer.lastElementChild?.querySelector('[name="lineDescription"]')?.focus();
   });
@@ -1315,6 +1507,11 @@
       followUp: asDate(values.followUp) ? '' : 'Choose a follow-up date.'
     };
     if (values.taxRate > 100 || values.discountAmount < 0 || values.depositPercent > 100) return showToast('Tax and deposit percentages must be 0–100, and discount cannot be negative.');
+    if (!isPro() && values.depositPercent > 0) return requirePro('Deposit collection');
+    if (!isPro() && values.lineItems.length > FREE_LINE_ITEM_LIMIT) return requirePro('Multiple quote line items');
+    if (!editingId && !isPro() && openQuoteCount() >= FREE_OPEN_QUOTE_LIMIT) {
+      return requirePro(`More than ${FREE_OPEN_QUOTE_LIMIT} open quotes`);
+    }
     let firstInvalid = null;
     Object.entries(errors).forEach(([name, message]) => {
       const input = form.elements[name];
@@ -1432,6 +1629,18 @@
       const subject = `Your ${quote.service} quote from ${profile.businessName || 'our team'}`;
       const followUpDate = shortDate(quote.followUp);
       const body = `Hi ${quote.customer},\n\nThank you for the opportunity to provide a quote for ${quote.service}.\n\nQuote total: ${formatMoney(quote.amount, quote.currency)}\n\nReview and respond to your quote: ${quoteLink}\n\nPlease let me know if you have any questions. I’ll plan to follow up on ${followUpDate}.\n\nBest,\n${profile.fullName || ''}${profile.businessName ? `\n${profile.businessName}` : ''}${profile.phone ? `\n${profile.phone}` : ''}`;
+      if (isPro()) {
+        try {
+          const headers = await authHeaders();
+          const response = await fetch('/api/send-quote-email', { method: 'POST', headers, body: JSON.stringify({ quoteId: quote.id, subject, body }) });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Could not send quote email.');
+          showToast('Quote email sent from your business name.');
+          return;
+        } catch (error) {
+          showToast(`${error.message} Opening your email app instead…`, 5000);
+        }
+      }
       window.location.href = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       return;
     }
@@ -1545,7 +1754,7 @@
     if (!records.length) return showToast('Accept a quote before exporting invoice records.');
     const fields = ['seller_business_name', 'seller_tax_id', 'seller_address', 'customer', 'invoice_number', 'invoice_date', 'due_date', 'subtotal', 'discount', 'tax_rate_percent', 'tax_amount', 'amount', 'currency', 'status', 'description'];
     downloadExport(`elite-quote-flow-accounting-${dateOffset(0)}.csv`, csvForRows(fields, records), 'text/csv;charset=utf-8;');
-    showToast('Accounting CSV exported. Review it before importing into bookkeeping software.');
+    showToast('Accounting CSV exported for QuickBooks/Xero import. Live accounting sync is not included; review the file before importing.');
   });
 
   $('#manage-templates-button').addEventListener('click', async () => {
@@ -1591,7 +1800,26 @@
     form.elements.depositPercent.value = template.depositPercent || 0;
     renderLineItemFields(template.lineItems || []);
   });
-  $('#invoice-rows').addEventListener('click', event => {
+  $('#invoice-rows').addEventListener('click', async event => {
+    if (event.target.closest('[data-pro-upsell="invoice"]')) return requirePro('Invoice balance collection');
+    const collect = event.target.closest('[data-collect-id]');
+    if (collect) {
+      if (!requirePro('Invoice balance collection')) return;
+      const quote = quotes.find(item => item.id === collect.dataset.collectId);
+      if (!quote) return;
+      collect.disabled = true;
+      try {
+        const headers = await authHeaders();
+        const response = await fetch('/api/invoice-checkout', { method: 'POST', headers, body: JSON.stringify({ quoteId: quote.id }) });
+        const result = await response.json();
+        if (!response.ok || !result.url) throw new Error(result.error || 'Could not open invoice checkout.');
+        window.location.assign(result.url);
+      } catch (error) {
+        showToast(error.message, 6000);
+        collect.disabled = false;
+      }
+      return;
+    }
     const button = event.target.closest('[data-invoice-id]');
     const quote = button && quotes.find(item => item.id === button.dataset.invoiceId);
     if (quote) openInvoiceDialog(quote);
@@ -1763,6 +1991,7 @@
   updateLeadEstimate();
   $('#auth-home').addEventListener('click', event => { event.preventDefault(); showLanding(); });
   $('#draft-quote-scope').addEventListener('click', async event => {
+    if (!requirePro('AI scope drafting')) return;
     const button = event.currentTarget;
     const terms = $('#quote-terms');
     const data = new FormData(form);
@@ -2037,6 +2266,31 @@
     }
   });
   document.querySelectorAll('.side-nav a').forEach(link => link.addEventListener('click', () => { document.body.classList.remove('nav-open'); $('#mobile-menu').setAttribute('aria-expanded', 'false'); $('#mobile-menu').setAttribute('aria-label', 'Open navigation'); }));
+  const referralParam = new URLSearchParams(window.location.search).get('ref');
+  if (referralParam && /^EQF[A-Z0-9]{4,16}$/i.test(referralParam)) {
+    try { localStorage.setItem('quoteflow.referralCode', referralParam.toUpperCase()); } catch { /* ignore */ }
+  }
+  const applyStoredReferral = async () => {
+    if (!currentUser || !supabaseClient) return;
+    let code = '';
+    try { code = localStorage.getItem('quoteflow.referralCode') || ''; } catch { code = ''; }
+    if (!code) return;
+    try {
+      const headers = await authHeaders();
+      const response = await fetch('/api/referrals', { method: 'POST', headers, body: JSON.stringify({ code }) });
+      if (response.ok || response.status === 409) {
+        try { localStorage.removeItem('quoteflow.referralCode'); } catch { /* ignore */ }
+        await loadGrowthExtras();
+      }
+    } catch { /* ignore until tables exist */ }
+  };
   showLanding();
   startApplication();
+  const watchAuthForReferral = setInterval(() => {
+    if (currentUser) {
+      applyStoredReferral();
+      clearInterval(watchAuthForReferral);
+    }
+  }, 1500);
+  window.setTimeout(() => clearInterval(watchAuthForReferral), 30000);
 })();

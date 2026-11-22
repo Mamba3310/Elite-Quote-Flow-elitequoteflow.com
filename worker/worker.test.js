@@ -197,8 +197,8 @@ test('review honeypot silently accepts bots without database writes',async()=>{
 
 test('landing page shows an honest sample preview, signup CTAs, interactive value estimator, steps, and current plan path',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/landing-refresh.css',import.meta.url),'utf8');
- assert.match(css,/\.lead-calculator/);assert.match(html,/Send the quote/);assert.match(html,/PRODUCT PREVIEW/);assert.match(html,/id="lead-calc-quotes"/);assert.match(html,/id="lead-calc-amount"/);assert.match(html,/id="lead-calc-result"/);assert.match(html,/id="landing-steps-cta"/);assert.match(html,/id="landing-pricing-cta"/);assert.match(html,/FREE TO START/);assert.match(html,/No sample or invented reviews are displayed/);assert.match(app,/updateLeadEstimate/);assert.match(app,/landing-calc-cta/);assert.match(app,/landing-pricing-cta/);assert.match(app,/Create an account/);
- assert.match(html,/id="customer-review-form"/);assert.match(html,/id="published-customer-reviews"/);assert.match(app,/api\/customer-reviews/);assert.match(app,/review\.review_text/);assert.doesNotMatch(app,/review\.customer_email/);
+ assert.match(css,/\.lead-calculator/);assert.match(html,/Send the quote/);assert.match(html,/PRODUCT PREVIEW/);assert.match(html,/id="lead-calc-quotes"/);assert.match(html,/id="lead-calc-amount"/);assert.match(html,/id="lead-calc-result"/);assert.match(html,/id="landing-steps-cta"/);assert.match(html,/id="landing-pricing-cta"/);assert.match(html,/FREE TO START/);assert.match(html,/landing-pricing-grid/);assert.match(html,/Stripe deposits and invoice balance collection/);assert.match(html,/No sample or invented reviews are displayed/);assert.doesNotMatch(html,/Prototype preview/);assert.match(app,/updateLeadEstimate/);assert.match(app,/landing-calc-cta/);assert.match(app,/landing-pricing-cta/);assert.match(app,/Create an account/);
+ assert.match(html,/id="customer-review-form"/);assert.match(html,/id="published-customer-reviews"/);assert.match(html,/id="team-panel"/);assert.match(html,/id="referral-panel"/);assert.match(app,/api\/customer-reviews/);assert.match(app,/api\/send-quote-email/);assert.match(app,/api\/invoice-checkout/);assert.match(app,/FREE_OPEN_QUOTE_LIMIT/);assert.match(app,/review\.review_text/);assert.doesNotMatch(app,/review\.customer_email/);
 });
 
 test('dashboard offers distinct monthly and lifetime purchase options',async()=>{
@@ -320,11 +320,12 @@ test('public quote bounds response payload and only allows GET and POST',async()
  const method=await worker.fetch(new Request(`https://app.example/q/${token}`,{method:'DELETE'}),baseEnv);assert.equal(method.status,405);
 });
 
-test('deposit endpoint authenticates user, checks ownership, calculates minor units and stores checkout session',async()=>{
+test('deposit endpoint authenticates Pro user, checks ownership, calculates minor units and stores checkout session',async()=>{
  const id='550e8400-e29b-41d4-a716-446655440000';let stripeForm,saved;
  await withMockedFetch(async(url,options={})=>{
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,business_name:'Acme'}]);
   if(target.includes('/rest/v1/quotes?')&&!options.method)return Response.json([{id,public_token:id,service:'Repair',amount:120,currency:'USD',deposit_percent:25,status:'sent',deposit_paid_at:null}]);
   if(target==='https://api.stripe.com/v1/checkout/sessions'){assert.match(options.headers['Idempotency-Key'],/^eqf-deposit-/);stripeForm=new URLSearchParams(options.body);return Response.json({id:'cs_123',url:'https://checkout.stripe.com/session'});}
   if(target.includes('/rest/v1/quotes?id=eq.')&&options.method==='PATCH'){saved=JSON.parse(options.body);return new Response(null,{status:204});}
@@ -335,25 +336,41 @@ test('deposit endpoint authenticates user, checks ownership, calculates minor un
  assert.equal(stripeForm.get('line_items[0][price_data][unit_amount]'),'3000');assert.equal(stripeForm.get('metadata[supabase_user_id]'),'user1');assert.equal(saved.stripe_checkout_session_id,'cs_123');assert.equal(stripeForm ? true : false,true);
 });
 
-test('deposit endpoint refuses unauthenticated callers and mismatched public tokens',async()=>{
+test('deposit endpoint refuses unauthenticated callers, free users, and mismatched public tokens',async()=>{
  const id='550e8400-e29b-41d4-a716-446655440000';
  const unauth=await worker.fetch(jsonRequest('https://app.example/api/deposit-checkout',{quoteId:id,publicToken:id}),baseEnv);assert.equal(unauth.status,401);
- await withMockedFetch(async url=>String(url).endsWith('/auth/v1/user')?Response.json({id:'u1'}):Response.json([{id,public_token:'550e8400-e29b-41d4-a716-446655440001',deposit_percent:10}]),async()=>{
+ await withMockedFetch(async url=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'u1'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'u1',is_pro:false}]);
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const response=await worker.fetch(jsonRequest('https://app.example/api/deposit-checkout',{quoteId:id,publicToken:id},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);assert.equal(response.status,402);
+ });
+ await withMockedFetch(async url=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'u1'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'u1',is_pro:true}]);
+  return Response.json([{id,public_token:'550e8400-e29b-41d4-a716-446655440001',deposit_percent:10}]);
+ },async()=>{
   const response=await worker.fetch(jsonRequest('https://app.example/api/deposit-checkout',{quoteId:id,publicToken:id},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);assert.equal(response.status,404);
  });
 });
 
-test('scheduled job expires quotes, sends due email, and persists reminder count',async()=>{
+test('scheduled job expires quotes, emails Pro owners only, and persists reminder count',async()=>{
  const {runScheduled}=await import('./scheduled.js');let patchCount=0;let emailSent=false;
  await withMockedFetch(async(url,options={})=>{
   const target=String(url);
-  if(target.includes('/rest/v1/quotes?status=')){if(new URL(target).searchParams.get('offset')!=='0')return Response.json([]);return Response.json([{id:'expired',email:'',expires_at:'2020-01-01',follow_up:'2020-01-01',reminder_count:0},{id:'due',email:'x@example.com',customer:'Alex',service:'Repair',expires_at:'2026-01-01',follow_up:'2024-12-31',reminder_count:0,public_token:'token'}]);}
+  if(target.includes('/rest/v1/quotes?status=')){if(new URL(target).searchParams.get('offset')!=='0')return Response.json([]);return Response.json([{id:'expired',user_id:'user1',email:'',expires_at:'2020-01-01',follow_up:'2020-01-01',reminder_count:0},{id:'due',user_id:'user1',email:'x@example.com',customer:'Alex',service:'Repair',expires_at:'2026-01-01',follow_up:'2024-12-31',reminder_count:0,public_token:'token'}]);}
+  if(target.includes('/rest/v1/profiles?')&&target.includes('is_pro=eq.true'))return Response.json([{id:'user1'}]);
+  if(target.includes('/rest/v1/profiles?')&&target.includes('select=id,business_name'))return Response.json([{id:'user1',business_name:'Acme Pros'}]);
+  if(target.includes('/rest/v1/recurring_service_plans?'))return Response.json([]);
   if(target==='https://api.resend.com/emails'){emailSent=true;return Response.json({id:'email'});}
   if(options.method==='PATCH'){patchCount++;return new Response(null,{status:204});}
   assert.fail(`Unexpected upstream request ${target}`);
  },async()=>{
   const result=await runScheduled({...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com',PUBLIC_APP_URL:'https://app.example'},new Date('2025-01-01T09:00:00Z'));
-  assert.deepEqual(result,{scanned:2,emailed:1,expired:1,failed:0});
+  assert.equal(result.scanned,2);assert.equal(result.emailed,1);assert.equal(result.expired,1);assert.equal(result.failed,0);assert.equal(result.skippedFree,0);
  });
  assert.equal(emailSent,true);assert.equal(patchCount,2);
 });
@@ -362,7 +379,10 @@ test('follow-up automation uses staged gentle messages after due date',async()=>
  const {runScheduled}=await import('./scheduled.js');let subject='',text='';
  await withMockedFetch(async(url,options={})=>{
   const target=String(url);
-  if(target.includes('/rest/v1/quotes?status='))return Response.json([{id:'q1',email:'x@example.com',customer:'Alex',service:'Repair',public_token:'token',follow_up:'2025-01-01',reminder_count:1,last_reminder_at:'2025-01-02T09:00:00Z'}]);
+  if(target.includes('/rest/v1/quotes?status='))return Response.json([{id:'q1',user_id:'user1',email:'x@example.com',customer:'Alex',service:'Repair',public_token:'token',follow_up:'2025-01-01',reminder_count:1,last_reminder_at:'2025-01-02T09:00:00Z'}]);
+  if(target.includes('/rest/v1/profiles?')&&target.includes('is_pro=eq.true'))return Response.json([{id:'user1'}]);
+  if(target.includes('/rest/v1/profiles?')&&target.includes('select=id,business_name'))return Response.json([{id:'user1',business_name:'Acme'}]);
+  if(target.includes('/rest/v1/recurring_service_plans?'))return Response.json([]);
   if(target==='https://api.resend.com/emails'){const body=JSON.parse(options.body);subject=body.subject;text=body.text;return Response.json({id:'email'});}
   if(options.method==='PATCH')return new Response(null,{status:204});
   assert.fail(`Unexpected ${target}`);
@@ -371,13 +391,58 @@ test('follow-up automation uses staged gentle messages after due date',async()=>
 });
 
 test('scheduled job enforces 24-hour quiet period and paginates quote results',async()=>{
- const {runScheduled}=await import('./scheduled.js');let requests=[];
+ const {runScheduled}=await import('./scheduled.js');let quoteOffsets=[];
  await withMockedFetch(async url=>{
-  const parsed=new URL(String(url));requests.push(parsed.searchParams.get('offset'));
-  if(parsed.searchParams.get('offset')==='0')return Response.json(Array.from({length:100},(_,i)=>({id:`q${i}`,email:'x@example.com',follow_up:'2024-12-31',reminder_count:1,last_reminder_at:'2025-01-01T08:00:00Z'})));
-  return Response.json([]);
+  const target=String(url);
+  const parsed=new URL(target);
+  if(target.includes('/rest/v1/quotes?status=')){
+   quoteOffsets.push(parsed.searchParams.get('offset'));
+   if(parsed.searchParams.get('offset')==='0')return Response.json(Array.from({length:100},(_,i)=>({id:`q${i}`,user_id:'user1',email:'x@example.com',follow_up:'2024-12-31',reminder_count:1,last_reminder_at:'2025-01-01T08:00:00Z'})));
+   return Response.json([]);
+  }
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1'}]);
+  if(target.includes('/rest/v1/recurring_service_plans?'))return Response.json([]);
+  assert.fail(`Unexpected ${target}`);
  },async()=>{const result=await runScheduled({...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'},new Date('2025-01-01T09:00:00Z'));assert.equal(result.scanned,100);assert.equal(result.emailed,0);});
- assert.deepEqual(requests,['0','100']);
+ assert.deepEqual(quoteOffsets,['0','100']);
+});
+
+test('invoice checkout and send-quote-email require Pro and create Stripe or Resend requests',async()=>{
+ const id='550e8400-e29b-41d4-a716-446655440000';
+ await withMockedFetch(async url=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,business_name:'Acme',full_name:'Alex Owner'}]);
+  if(target.includes('/rest/v1/quotes?'))return Response.json([{id,customer:'Casey',email:'casey@example.com',service:'Repair',amount:200,currency:'USD',status:'won',invoice_status:'unpaid',deposit_percent:25,deposit_paid_at:'2025-01-01T00:00:00Z',public_token:id}]);
+  if(target==='https://api.stripe.com/v1/checkout/sessions')return Response.json({id:'cs_inv',url:'https://checkout.stripe.com/invoice'});
+  if(target==='https://api.resend.com/emails')return Response.json({id:'email_1'});
+  if(target.includes('/rest/v1/quotes?id=eq.'))return new Response(null,{status:204});
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const invoice=await worker.fetch(jsonRequest('https://app.example/api/invoice-checkout',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);
+  assert.equal(invoice.status,200);assert.equal((await invoice.json()).url,'https://checkout.stripe.com/invoice');
+  const email=await worker.fetch(jsonRequest('https://app.example/api/send-quote-email',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(email.status,200);assert.equal((await email.json()).sent,true);
+ });
+});
+
+test('teams invite and referral endpoints create Pro collaboration records',async()=>{
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?id=eq.user1')&&!options.method)return Response.json([{id:'user1',is_pro:true,business_name:'Acme',referral_code:null,referral_credits_months:0}]);
+  if(target.includes('/rest/v1/profiles?id=eq.user1')&&options.method==='PATCH')return Response.json([{id:'user1',referral_code:'EQFABCDEF1234'}]);
+  if(target.includes('/rest/v1/business_teams?owner_id=')&&!options.method)return Response.json([]);
+  if(target.includes('/rest/v1/business_teams')&&options.method==='POST')return Response.json([{id:'team1',owner_id:'user1',name:'Acme'}]);
+  if(target.includes('/rest/v1/business_team_members')&&options.method==='POST')return Response.json([{id:'member1',invited_email:'mate@example.com',role:'member',invitation_status:'pending'}]);
+  if(target.includes('/rest/v1/business_team_members?'))return Response.json([]);
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const referral=await worker.fetch(new Request('https://app.example/api/referrals',{headers:{Authorization:`Bearer ${ownerToken}`}}),baseEnv);
+  assert.equal(referral.status,200);assert.match((await referral.json()).referralCode,/^EQF/);
+  const invite=await worker.fetch(jsonRequest('https://app.example/api/teams',{email:'mate@example.com',role:'member'},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);
+  assert.equal(invite.status,200);assert.equal((await invite.json()).invited,true);
+ });
 });
 
 test('deposit webhook sets paid timestamp for matching quote owner',async()=>{
@@ -400,6 +465,7 @@ test('paid one-time Pro checkout activates lifetime access for its referenced pr
   const target=String(url);
   if(target.includes('/rest/v1/profiles?id=eq.user1&select=id'))return Response.json([{id:'user1'}]);
   if(target.includes('/rest/v1/profiles?id=eq.user1')&&options.method==='PATCH'){update=JSON.parse(options.body);return new Response(null,{status:204});}
+  if(target.includes('/rest/v1/profiles?')&&!options.method)return Response.json([{id:'user1',referred_by_code:null,referral_reward_status:'none'}]);
   assert.fail(`Unexpected upstream request ${target}`);
  },async()=>{
   const response=await worker.fetch(new Request('https://app.example/api/stripe-webhook',{method:'POST',body,headers:{'Stripe-Signature':signature}}),baseEnv);
@@ -442,6 +508,7 @@ test('paid monthly Pro subscription activates renewable Pro access',async()=>{
   const target=String(url);
   if(target.includes('/rest/v1/profiles?id=eq.user1&select=id'))return Response.json([{id:'user1'}]);
   if(target.includes('/rest/v1/profiles?id=eq.user1')&&options.method==='PATCH'){update=JSON.parse(options.body);return new Response(null,{status:204});}
+  if(target.includes('/rest/v1/profiles?')&&!options.method)return Response.json([{id:'user1',referred_by_code:null,referral_reward_status:'none'}]);
   assert.fail(`Unexpected upstream request ${target}`);
  },async()=>{
   const response=await worker.fetch(new Request('https://app.example/api/stripe-webhook',{method:'POST',body,headers:{'Stripe-Signature':signature}}),baseEnv);

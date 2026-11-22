@@ -9,3 +9,9 @@
 @media(max-width:720px){.welcome-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}.welcome-actions #export-button,.welcome-actions #export-customers-button,.welcome-actions #export-calendar-button,.welcome-actions #export-contacts-button{display:inline-flex;min-height:32px;padding-inline:8px;font-size:8px}.welcome-actions #import-local-button,.welcome-actions #invite-button{display:none}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important}}
 
 .google-signin-button{width:100%;min-height:42px;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:17px;border:1px solid #30394a;border-radius:6px;background:#f8f9fa;color:#202124;font:600 11px var(--sans);cursor:pointer}.google-signin-button:hover{background:#fff;border-color:#7c9be6}.google-signin-button:disabled{opacity:.65;cursor:wait}.google-g{font:700 16px Arial,sans-serif;color:#4285f4}.auth-divider{display:flex;align-items:center;gap:12px;margin:17px 0;color:#8994a6;font-size:9px}.auth-divider::before,.auth-divider::after{height:1px;flex:1;background:#293244;content:''}.auth-divider[hidden],.google-signin-button[hidden]{display:none}
+
+.free-limit-note{margin:0 0 14px;padding:12px 14px;border:1px solid #d9dee8;border-radius:10px;background:#f7f9fc;color:#3b465c;font-size:13px;line-height:1.5}
+.pro-only-field.is-locked{opacity:.72}
+.pro-only-field.is-locked::after{display:block;margin-top:6px;color:#667085;font-size:11px;content:"Included with Pro"}
+.invoice-actions{display:flex;flex-wrap:wrap;gap:8px}
+.growth-list-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #e6ebf2}
