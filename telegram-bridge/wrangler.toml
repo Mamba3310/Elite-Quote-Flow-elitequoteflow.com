@@ -1,0 +1,16 @@
+name = "quoteflow-telegram-bridge"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+[vars]
+CURSOR_REPO_URL = "https://github.com/Mamba3310/Elite-Quote-Flow-elitequoteflow.com"
+CURSOR_STARTING_REF = "main"
+
+[[durable_objects.bindings]]
+name = "BRIDGE"
+class_name = "TelegramBridge"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TelegramBridge"]
