@@ -568,6 +568,27 @@ test('Pro bulk messages send one email per customer and stop at 25',async()=>{
  assert.equal(sent.length,2);assert.equal(sent[0].text,'Hi Casey, the yard is ready.');assert.equal(sent[1].to[0],'ada@example.com');
 });
 
+test('customer messages accept up to three safe attachments and reject other files',async()=>{
+ const sent=[];
+ const pdf=Buffer.from('%PDF-1.4').toString('base64');
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,business_name:'Acme Painting',full_name:'Alex Owner'}]);
+  if(target==='https://api.resend.com/emails'){sent.push(JSON.parse(options.body));return Response.json({id:'msg_file'});}
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const sentMessage=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{to:'casey@example.com',subject:'Hello',body:'The drawing is attached.',attachments:[{filename:'../plan.pdf',content:pdf}]},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com'});
+  assert.equal(sentMessage.status,200);
+  const blocked=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{to:'casey@example.com',subject:'Hello',body:'The drawing is attached.',attachments:[{filename:'plan.exe',content:pdf}]},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(blocked.status,400);
+  assert.match((await blocked.json()).error,/PDF, image, text, or CSV/);
+ });
+ assert.equal(sent.length,1);assert.equal(sent[0].attachments[0].filename,'plan.pdf');assert.equal(sent[0].attachments[0].content,pdf);
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
+ assert.match(html,/id="message-attachment-field"/);assert.match(html,/name="attachment"/);
+});
+
 test('business sender addresses use the business name and avoid platform mailboxes',async()=>{
  const {businessSender}=await import('./sender-address.js');
  const sender=businessSender({RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com',PUBLIC_APP_URL:'https://elitequoteflow.com'},{businessName:"José's Painting & Co",replyTo:'Owner@Example.com'});

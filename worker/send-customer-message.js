@@ -1,5 +1,6 @@
 import { json, requireProUser, readJson } from './pro-access.js';
 import { businessSender } from './sender-address.js';
+import { messageAttachments } from './message-attachments.js';
 
 const BULK_MESSAGE_LIMIT = 25;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -22,14 +23,16 @@ function recipientsFrom(payload) {
   return recipients;
 }
 
-async function deliverMessage(env, sender, recipient, subject, text) {
+async function deliverMessage(env, sender, recipient, subject, text, attachments) {
   const name = recipient.name || recipient.to.split('@')[0];
   const personal = text.split('{{customer}}').join(name);
+  const message = { from: sender.from, to: [recipient.to], reply_to: sender.replyTo || undefined, subject, text: personal };
+  if (attachments.length) message.attachments = attachments;
   try {
     const resend = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY.trim()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: sender.from, to: [recipient.to], reply_to: sender.replyTo || undefined, subject, text: personal })
+      body: JSON.stringify(message)
     });
     const result = await readJson(resend);
     if (!resend.ok) {
@@ -61,6 +64,8 @@ export async function onSendCustomerMessage(request, env) {
   if (recipients.some(recipient => !EMAIL.test(recipient.to))) return json({ error: 'Enter a valid customer email.' }, 400);
   if (!subject) return json({ error: 'Enter a subject.' }, 400);
   if (text.length < 2) return json({ error: 'Write the message first.' }, 400);
+  const files = messageAttachments(payload);
+  if (files.error) return json({ error: files.error }, 400);
   const profile = access.profile || {};
   const sender = businessSender(env, {
     businessName: profile.business_name,
@@ -69,7 +74,7 @@ export async function onSendCustomerMessage(request, env) {
   });
   if (!sender) return json({ error: 'In-app email sending is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL.' }, 503);
   const results = [];
-  for (const recipient of recipients) results.push(await deliverMessage(env, sender, recipient, subject, text));
+  for (const recipient of recipients) results.push(await deliverMessage(env, sender, recipient, subject, text, files.attachments));
   const sentResults = results.filter(result => result.sent);
   if (!sentResults.length) {
     const detail = results.find(result => result.error)?.error;
