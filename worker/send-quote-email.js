@@ -1,5 +1,6 @@
 import { json, requireProUser, readJson } from './pro-access.js';
 import { businessSender } from './sender-address.js';
+import { messageAttachments } from './message-attachments.js';
 
 function escapeText(value) {
   return String(value || '').replace(/\r?\n/g, '\n').trim();
@@ -35,6 +36,8 @@ export async function onSendQuoteEmail(request, env) {
     replyTo: access.user.email
   });
   if (!sender) return json({ error: 'In-app email sending is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL, or use your email app to send the quote.' }, 503);
+  const files = messageAttachments(payload);
+  if (files.error) return json({ error: files.error }, 400);
   const fromName = sender.name === 'Elite Quote Flow' ? 'our team' : sender.name;
   const subject = escapeText(payload.subject) || `Your ${quote.service} quote from ${fromName}`;
   const body = escapeText(payload.body) || [
@@ -50,16 +53,18 @@ export async function onSendQuoteEmail(request, env) {
     profile.phone || ''
   ].filter(Boolean).join('\n');
 
+  const message = {
+    from: sender.from,
+    to: [quote.email],
+    reply_to: sender.replyTo || undefined,
+    subject,
+    text: body
+  };
+  if (files.attachments.length) message.attachments = files.attachments;
   const resend = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY.trim()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: sender.from,
-      to: [quote.email],
-      reply_to: sender.replyTo || undefined,
-      subject,
-      text: body
-    })
+    body: JSON.stringify(message)
   });
   const result = await readJson(resend);
   if (!resend.ok) {

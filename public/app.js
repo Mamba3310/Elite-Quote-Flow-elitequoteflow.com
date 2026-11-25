@@ -307,6 +307,8 @@
     if (bulkList) bulkList.hidden = !bulk;
     const bulkNote = $('#message-bulk-note');
     if (bulkNote) bulkNote.hidden = !bulk;
+    const attachmentField = $('#message-attachment-field');
+    if (attachmentField) attachmentField.hidden = text;
     const count = selectedRecipients().length;
     $('#message-send').textContent = text ? 'Open text' : bulk && count ? `Send to ${count}` : 'Send email';
     $('#message-footnote').textContent = text
@@ -326,6 +328,7 @@
     form.elements.phone.value = draft.phone || '';
     form.elements.subject.value = draft.subject || (draft.customer ? `Message for ${draft.customer}` : '');
     form.elements.body.value = draft.body || (draft.customer ? `Hi ${draft.customer},\n\n` : '');
+    if (form.elements.attachment) form.elements.attachment.value = '';
     $('#message-from').textContent = `From ${mailbox.name} <${mailbox.address}>`;
     $('#message-error').textContent = '';
     renderBulkList();
@@ -2228,7 +2231,7 @@
     }
   });
 
-  async function sendCustomerEmail(quote, subject, body, successLabel) {
+  async function sendCustomerEmail(quote, subject, body, successLabel, attachments = []) {
     const mailto = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     if (!isPro()) {
       window.location.href = mailto;
@@ -2236,7 +2239,7 @@
     }
     try {
       const headers = await authHeaders();
-      const response = await fetch('/api/send-quote-email', { method: 'POST', headers, body: JSON.stringify({ quoteId: quote.id, subject, body }) });
+      const response = await fetch('/api/send-quote-email', { method: 'POST', headers, body: JSON.stringify({ quoteId: quote.id, subject, body, attachments }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not send the email.');
       showToast(result.from ? `${successLabel} as ${result.from}.` : `${successLabel}.`);
@@ -2718,6 +2721,22 @@
   $('#message-close')?.addEventListener('click', () => $('#message-composer')?.close());
   $('#message-cancel')?.addEventListener('click', () => $('#message-composer')?.close());
   $('#message-composer')?.addEventListener('click', event => { if (event.target === $('#message-composer')) $('#message-composer').close(); });
+  function readMessageAttachments(fileList) {
+    const files = [...(fileList || [])].filter(file => file && file.size);
+    if (files.length > 3) return Promise.reject(new Error('Attach up to 3 files.'));
+    const allowed = /\.(pdf|png|jpe?g|webp|txt|csv)$/i;
+    return Promise.all(files.map(file => new Promise((resolve, reject) => {
+      if (file.size > 2 * 1024 * 1024) { reject(new Error(`${file.name} is larger than 2 MB.`)); return; }
+      if (!allowed.test(file.name)) { reject(new Error('Attach a PDF, image, text, or CSV file.')); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        resolve({ filename: file.name, content: result.slice(result.indexOf(',') + 1) });
+      };
+      reader.onerror = () => reject(new Error('Could not read that file.'));
+      reader.readAsDataURL(file);
+    })));
+  }
   $('#message-form')?.addEventListener('submit', async event => {
     event.preventDefault();
     if (!requirePro('Customer messages')) return;
@@ -2727,6 +2746,11 @@
     const error = $('#message-error');
     error.textContent = '';
     if (body.length < 2) { error.textContent = 'Write the message first.'; return; }
+    let attachments = [];
+    if (channel !== 'text') {
+      try { attachments = await readMessageAttachments(messageForm.elements.attachment?.files); }
+      catch (fileError) { error.textContent = fileError.message; return; }
+    }
     if (channel === 'text') {
       const phone = messageForm.elements.phone.value.replace(/[^\d+]/g, '');
       if (phone.length < 7) { error.textContent = 'Enter the customer phone number.'; return; }
@@ -2745,7 +2769,7 @@
       button.disabled = true;
       try {
         const headers = await authHeaders();
-        const response = await fetch('/api/send-customer-message', { method: 'POST', headers, body: JSON.stringify({ recipients, subject, body }) });
+        const response = await fetch('/api/send-customer-message', { method: 'POST', headers, body: JSON.stringify({ recipients, subject, body, attachments }) });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not send the message.');
         const failed = Number(result.failed) || 0;
@@ -2764,12 +2788,12 @@
     button.disabled = true;
     try {
       if (messageDraft?.quote) {
-        const sent = await sendCustomerEmail(messageDraft.quote, subject, body, messageDraft.successLabel || 'Message sent');
+        const sent = await sendCustomerEmail(messageDraft.quote, subject, body, messageDraft.successLabel || 'Message sent', attachments);
         if (sent) $('#message-composer').close();
         return;
       }
       const headers = await authHeaders();
-      const response = await fetch('/api/send-customer-message', { method: 'POST', headers, body: JSON.stringify({ to: email, subject, body }) });
+      const response = await fetch('/api/send-customer-message', { method: 'POST', headers, body: JSON.stringify({ to: email, subject, body, attachments }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not send the message.');
       showToast(result.from ? `Message sent as ${result.from}.` : 'Message sent.');

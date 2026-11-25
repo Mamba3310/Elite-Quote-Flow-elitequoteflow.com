@@ -92,6 +92,8 @@
     ['Add quote', 'Ajouter un devis', 'Añadir presupuesto', 'Adicionar orçamento', '添加报价', 'Fi ìdíyelé kún'],
     ['Import local quotes', 'Importer les devis locaux', 'Importar presupuestos locales', 'Importar orçamentos locais', '导入本地报价', 'Gbé àwọn ìdíyelé ìbílẹ̀ wọlé'],
     ['QUOTE DESK', 'BUREAU DES DEVIS', 'MESA DE PRESUPUESTOS', 'MESA DE ORÇAMENTOS', '报价台', 'TÁBÌLÌ ÌDÍYELÉ'],
+    ['Attachments', 'Pièces jointes', 'Archivos adjuntos', 'Anexos', '附件', 'Àwọn àsomọ́'],
+    ['Up to 3 files, 2 MB each. PDF, image, text, or CSV. Email only.', 'Jusqu’à 3 fichiers, 2 Mo chacun. PDF, image, texte ou CSV. E-mail seulement.', 'Hasta 3 archivos, 2 MB cada uno. PDF, imagen, texto o CSV. Solo correo.', 'Até 3 arquivos, 2 MB cada. PDF, imagem, texto ou CSV. Somente e-mail.', '最多 3 个文件，每个 2 MB。PDF、图片、文本或 CSV。仅限邮件。', 'Fáìlì 3 tó pọ̀ jù, 2 MB lọ́kọ̀ọ̀kan. PDF, àwòrán, ọ̀rọ̀, tàbí CSV. Ímeèlì nìkan.'],
     ['Send to several customers', 'Envoyer à plusieurs clients', 'Enviar a varios clientes', 'Enviar para vários clientes', '发送给多位客户', 'Fi ránṣẹ́ sí ọ̀pọ̀ oníbàárà'],
     ['Select all', 'Tout sélectionner', 'Seleccionar todo', 'Selecionar tudo', '全选', 'Yan gbogbo'],
     ['One send can include 25 customers. Use {{customer}} where the name should appear.', 'Un envoi peut inclure 25 clients. Utilisez {{customer}} là où le nom doit apparaître.', 'Un envío puede incluir 25 clientes. Use {{customer}} donde deba aparecer el nombre.', 'Um envio pode incluir 25 clientes. Use {{customer}} onde o nome deve aparecer.', '一次最多发送给 25 位客户。在需要显示姓名的地方使用 {{customer}}。', 'Ìfiránṣẹ́ kan lè dé ọ̀dọ̀ oníbàárà 25. Lo {{customer}} níbi tí orúkọ yóò hàn.'],
