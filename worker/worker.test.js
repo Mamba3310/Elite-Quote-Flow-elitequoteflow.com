@@ -13,7 +13,7 @@ test('HTTP requests redirect to HTTPS and HTTPS responses include HSTS',async()=
 });
 
 test('admin portal is served as a private no-store page with owner tools',async()=>{
- const response=await worker.fetch(new Request('https://elitequoteflow.com/admin'),baseEnv);const body=await response.text();assert.equal(response.status,200);assert.match(body,/customer reviews/i);assert.match(body,/booking requests/i);assert.match(body,/recurring services/i);assert.match(body,/recent quote activity/i);assert.match(body,/admin-login-form/);assert.match(body,/signInWithPassword/);assert.match(body,/summary-quotes/);assert.match(body,/id="calendar"/);assert.match(body,/id="timeline"/);assert.match(body,/Export filtered CSV/);assert.match(body,/Signed in as/);assert.match(response.headers.get('cache-control'),/no-store/);assert.match(response.headers.get('x-frame-options'),/DENY/);
+ const response=await worker.fetch(new Request('https://elitequoteflow.com/admin'),baseEnv);const body=await response.text();assert.equal(response.status,200);assert.match(body,/customer reviews/i);assert.match(body,/booking requests/i);assert.match(body,/recurring services/i);assert.match(body,/recent quote activity/i);assert.match(body,/admin-login-form/);assert.match(body,/signInWithPassword/);assert.match(body,/summary-quotes/);assert.match(body,/Follow-ups due/);assert.match(body,/Deposits not paid/);assert.match(body,/Most viewed quotes/);assert.match(body,/Win rate/);assert.match(body,/id="calendar"/);assert.match(body,/id="timeline"/);assert.match(body,/Export filtered CSV/);assert.match(body,/Signed in as/);assert.match(response.headers.get('cache-control'),/no-store/);assert.match(response.headers.get('x-frame-options'),/DENY/);
 });
 
 test('admin access shows missing owner configuration without leaking the configured email',async()=>{
@@ -430,6 +430,26 @@ test('invoice checkout and send-quote-email require Pro and create Stripe or Res
   assert.equal(invoice.status,200);assert.equal((await invoice.json()).url,'https://checkout.stripe.com/invoice');
   const email=await worker.fetch(jsonRequest('https://app.example/api/send-quote-email',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
   assert.equal(email.status,200);assert.equal((await email.json()).sent,true);
+ });
+});
+
+test('staff review accounts can use Pro actions without a paid subscription',async()=>{
+ const id='550e8400-e29b-41d4-a716-446655440000';
+ await withMockedFetch(async url=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:false,business_name:'Acme',full_name:'Alex Owner'}]);
+  if(target.includes('/rest/v1/quotes?'))return Response.json([{id,customer:'Casey',email:'casey@example.com',service:'Repair',amount:200,currency:'USD',public_token:id}]);
+  if(target==='https://api.resend.com/emails')return Response.json({id:'email_staff'});
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const denied=await worker.fetch(jsonRequest('https://app.example/api/send-quote-email',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(denied.status,402);
+  const allowed=await worker.fetch(jsonRequest('https://app.example/api/send-quote-email',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,STAFF_EMAILS:'owner@example.com',RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(allowed.status,200);
+  const access=await worker.fetch(new Request('https://app.example/api/account-access',{headers:{Authorization:`Bearer ${ownerToken}`}}),{...baseEnv,OWNER_ANALYTICS_EMAILS:'owner@example.com, teammate@example.com'});
+  const body=await access.json();
+  assert.equal(access.status,200);assert.equal(body.staff,true);assert.equal(body.pro,false);assert.equal(body.access,'staff');assert.equal(body.emails,undefined);
  });
 });
 

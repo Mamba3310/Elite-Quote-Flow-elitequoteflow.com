@@ -10,6 +10,7 @@ import { onSendQuoteEmail } from './send-quote-email.js';
 import { onTeamsRequest } from './teams.js';
 import { onReferralsRequest } from './referrals.js';
 import { onSupportChat } from './support-chat.js';
+import { onAccountAccess } from './pro-access.js';
 import { onCustomerReview } from './customer-reviews.js';
 import { adminPage, onAdminApi } from './admin.js';
 import { onPublicBooking } from './public-booking.js';
@@ -58,6 +59,7 @@ export default {
       const config = JSON.stringify({ url: env.SUPABASE_URL.trim().replace(/\/$/, ''), anonKey: env.SUPABASE_ANON_KEY.trim() }).replace(/</g, '\u003c');
       return new Response(`window.QUOTEFlow_SUPABASE_CONFIG=Object.freeze(${config});`, { headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
     }
+    if (url.pathname === '/api/account-access') return onAccountAccess(request, env);
     if (url.pathname === '/api/analytics') return onAnalyticsRequest(request, env);
     if (url.pathname === '/api/support-chat') return onSupportChat(request, env);
     if (url.pathname === '/api/customer-reviews') return onCustomerReview(request, env);
