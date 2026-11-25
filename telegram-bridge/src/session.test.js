@@ -2,13 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   accessFor,
+  bytesToDataUrl,
+  composePrompt,
   cursorClient,
   formatRun,
   handleUpdate,
+  imageAttachment,
   interpret,
   pollChats,
   publicError,
+  readImageText,
   splitTelegram,
+  telegramClient,
+  usableTranscript,
   webhookAuthorized,
   wrapPrompt,
 } from "./session.js";
@@ -273,4 +279,99 @@ test("the Cursor client posts a create without putting the key in the body", asy
   assert.equal(JSON.stringify(body).includes(env.CURSOR_API_KEY), false);
   assert.equal(seen[0].options.headers.Authorization, "Bearer cur_test_key");
   assert.equal(accessFor(env, 42), "allowed");
+});
+
+test("a photo is read and the text starts the agent", async () => {
+  const store = memoryStore();
+  const io = recorder();
+  const seen = [];
+  io.telegram.download = async (fileId) => {
+    seen.push(fileId);
+    return new Uint8Array([1, 2, 3]);
+  };
+  const ai = {
+    async run(model, input) {
+      seen.push({ model, image: input.image.slice(0, 23) });
+      return { result: "Labor 2 hours\nMaterials $40" };
+    },
+  };
+  const update = {
+    update_id: 9,
+    message: {
+      message_id: 9,
+      caption: "Turn this into a quote",
+      photo: [{ file_id: "small", file_size: 20 }, { file_id: "large", file_size: 900 }],
+      from: { id: 42 },
+      chat: { id: 42, type: "private" },
+    },
+  };
+  const outcome = await handleUpdate({ store, cursor: io.cursor, telegram: io.telegram, env: { ...env, AI: ai }, update });
+  assert.equal(outcome.scheduleAlarm, true);
+  assert.deepEqual(seen, ["large", { model: "@cf/meta/llama-3.2-11b-vision-instruct", image: "data:image/jpeg;base64," }]);
+  assert.match(io.calls[0].text, /Turn this into a quote/);
+  assert.match(io.calls[0].text, /Labor 2 hours/);
+  assert.equal(io.sent.some((item) => /stay on your phone/.test(item.text)), false);
+});
+
+test("a photo with no readable text does not start an agent", async () => {
+  const store = memoryStore();
+  const io = recorder();
+  io.telegram.download = async () => new Uint8Array([9]);
+  const ai = { async run() { return { result: "(no text)" }; } };
+  const update = {
+    update_id: 10,
+    message: {
+      photo: [{ file_id: "only", file_size: 40 }],
+      from: { id: 42 },
+      chat: { id: 42, type: "private" },
+    },
+  };
+  const outcome = await handleUpdate({ store, cursor: io.cursor, telegram: io.telegram, env: { ...env, AI: ai }, update });
+  assert.equal(outcome.scheduleAlarm, false);
+  assert.equal(io.calls.length, 0);
+  assert.match(io.sent[0].text, /could not read any text/);
+});
+
+test("a non-image file is refused and the photo disclaimer is gone", async () => {
+  const store = memoryStore();
+  const io = recorder();
+  const update = {
+    update_id: 11,
+    message: {
+      document: { file_id: "doc", mime_type: "application/pdf" },
+      from: { id: 42 },
+      chat: { id: 42, type: "private" },
+    },
+  };
+  await handleUpdate({ store, cursor: io.cursor, telegram: io.telegram, env, update });
+  assert.match(io.sent[0].text, /photo of text/);
+  assert.doesNotMatch(io.sent[0].text, /Photos and files stay on your phone/);
+  assert.equal(io.calls.length, 0);
+  assert.equal(imageAttachment({ photo: [{ file_id: "big", file_size: 2_000_000 }, { file_id: "ok", file_size: 500 }] }).fileId, "ok");
+  assert.equal(usableTranscript("(no text)"), "");
+  assert.match(composePrompt("Caption", "Hello"), /Text read from the photo:\nHello/);
+  const encoded = bytesToDataUrl(new Uint8Array([104, 105]), "image/png");
+  assert.equal(encoded, "data:image/png;base64,aGk=");
+  const read = await readImageText({ async run() { return { response: "Invoice 12" }; } }, new Uint8Array([1]));
+  assert.equal(read, "Invoice 12");
+});
+
+test("telegram download fetches the file and rejects a path escape", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url.includes("/getFile")) {
+      return new Response(JSON.stringify({ result: { file_path: "photos/note.jpg", file_size: 4 } }), { status: 200 });
+    }
+    return new Response(Uint8Array.from([7, 8]), { status: 200 });
+  };
+  const client = telegramClient(env, fetchImpl);
+  const bytes = await client.download("Abc_123");
+  assert.deepEqual([...bytes], [7, 8]);
+  assert.match(calls[0], /getFile\?file_id=Abc_123$/);
+  assert.match(calls[1], /\/file\/bot123456:secret-token\/photos\/note\.jpg$/);
+  await assert.rejects(
+    () => telegramClient(env, async () => new Response(JSON.stringify({ result: { file_path: "../secret" } }), { status: 200 })).download("Abc_123"),
+    /no path/,
+  );
 });

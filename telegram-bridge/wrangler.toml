@@ -7,6 +7,9 @@ workers_dev = true
 CURSOR_REPO_URL = "https://github.com/Mamba3310/Elite-Quote-Flow-elitequoteflow.com"
 CURSOR_STARTING_REF = "main"
 
+[ai]
+binding = "AI"
+
 [[durable_objects.bindings]]
 name = "BRIDGE"
 class_name = "TelegramBridge"

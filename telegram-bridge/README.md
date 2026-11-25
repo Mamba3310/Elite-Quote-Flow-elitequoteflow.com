@@ -52,4 +52,6 @@ Message the bot in a private chat.
 
 The agent link in the reply opens that same run on the web. Your laptop does not need to be on.
 
-Only allowlisted users in private chats can start work. Other people get no reply. Photos and files are not forwarded.
+Only allowlisted users in private chats can start work. Other people get no reply. A photo is read and the text is included in the agent message. Other files are not forwarded.
+
+Photo reading uses Workers AI (`@cf/meta/llama-3.2-11b-vision-instruct`). The first time that model runs on the Cloudflare account, Meta's license has to be accepted in the Workers AI catalog.
