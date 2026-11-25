@@ -108,6 +108,7 @@ test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',
  for (const label of ['Overview','Quotes','Follow-ups','Calendar','Calculator','Templates','Import estimate','Customer history','Invoices','Appointments']) assert.match(html,new RegExp(`>${label}(?: <span|</button>)`));
  for (const label of ['Branded email','Deposits','Multi-item quotes','Auto reminders','AI drafting','Exports','Teams','Collect invoices','Recurring','Referrals']) assert.match(html,new RegExp(`${label} <span class="pro-badge">PRO</span>`));
  assert.match(html,/data-pro-feature="Team invites"/);assert.match(app,/if \(feature && !isPro\(\)\) requirePro\(feature\)/);assert.match(app,/button\.hidden = false/);assert.match(app,/if \(!requirePro\('Quote export'\)\) return/);assert.match(css,/\.nav-link\.is-locked \.pro-badge/);
+ assert.match(html,/id="takeout-bar"/);assert.match(html,/id="branded-email-dialog"/);assert.match(html,/rel="icon" href="\/favicon.svg"/);assert.match(app,/function showBrandedEmail/);assert.match(app,/action === 'branded-email'/);assert.match(css,/\.sidebar\{position:fixed[^}]*width:300px/);
 });
 
 test('calculator currency control offers supported currencies and updates results and estimate currency',async()=>{
