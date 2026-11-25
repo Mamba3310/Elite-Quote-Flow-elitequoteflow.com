@@ -2892,6 +2892,49 @@
   $('#refresh-bookings').addEventListener('click', loadGrowthFeatures);
   $('#support-launch').addEventListener('click', () => supportDialog.showModal());
   $('#landing-support-launch').addEventListener('click', () => supportDialog.showModal());
+  const helpNudge = $('#help-nudge');
+  let helpChime;
+  const unlockHelpChime = () => {
+    try {
+      helpChime = helpChime || new AudioContext();
+      if (helpChime.state === 'suspended') helpChime.resume();
+    } catch { /* A browser can block sound until the next visit. */ }
+  };
+  document.addEventListener('pointerdown', unlockHelpChime);
+  document.addEventListener('keydown', unlockHelpChime);
+  function playHelpChime() {
+    try {
+      const context = helpChime || new AudioContext();
+      helpChime = context;
+      if (context.state === 'suspended') context.resume();
+      const start = context.currentTime + 0.02;
+      [523.25, 659.25, 783.99].forEach((frequency, index) => {
+        const tone = context.createOscillator();
+        const level = context.createGain();
+        tone.type = 'sine';
+        tone.frequency.value = frequency;
+        const when = start + index * 0.11;
+        level.gain.setValueAtTime(0.0001, when);
+        level.gain.exponentialRampToValueAtTime(0.06, when + 0.02);
+        level.gain.exponentialRampToValueAtTime(0.0001, when + 0.42);
+        tone.connect(level).connect(context.destination);
+        tone.start(when);
+        tone.stop(when + 0.44);
+      });
+    } catch { /* The check-in still appears when sound is unavailable. */ }
+  }
+  function offerHelpNudge() {
+    if (!helpNudge || sessionStorage.getItem('eqf-help-nudge') || document.querySelector('dialog[open]')) {
+      if (helpNudge && !sessionStorage.getItem('eqf-help-nudge') && document.querySelector('dialog[open]')) window.setTimeout(offerHelpNudge, 20000);
+      return;
+    }
+    helpNudge.hidden = false;
+    sessionStorage.setItem('eqf-help-nudge', '1');
+    playHelpChime();
+  }
+  window.setTimeout(offerHelpNudge, 40000 + Math.floor(Math.random() * 35000));
+  $('#help-nudge-dismiss')?.addEventListener('click', () => { helpNudge.hidden = true; });
+  $('#help-nudge-open')?.addEventListener('click', () => { helpNudge.hidden = true; supportDialog.showModal(); });
   $('#support-close').addEventListener('click', () => supportDialog.close());
   supportDialog.addEventListener('click', event => { if (event.target === supportDialog) supportDialog.close(); });
   async function loadPublishedCustomerReviews() {
