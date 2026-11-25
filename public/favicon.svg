@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Elite Quote Flow">
+  <rect width="64" height="64" rx="14" fill="#111710"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="13" fill="none" stroke="#9b7d3e" stroke-width="3"/>
+  <text x="32" y="39" text-anchor="middle" fill="#dec47b" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800" letter-spacing="-0.8">EQF</text>
+</svg>

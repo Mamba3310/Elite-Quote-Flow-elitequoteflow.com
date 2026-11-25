@@ -192,6 +192,28 @@
     subtitle.textContent = `${openLine}, and ${dueLine}. Send the next quote, check in before a job goes quiet, and keep the approval on the same record.`;
   }
 
+  function brandedMailbox() {
+    const reserved = new Set(['abuse', 'admin', 'administrator', 'billing', 'contact', 'dmarc', 'email', 'hello', 'help', 'hostmaster', 'info', 'legal', 'mail', 'mailer-daemon', 'no-reply', 'noreply', 'owner', 'postmaster', 'privacy', 'quotes', 'root', 'sales', 'security', 'spf', 'staff', 'support', 'team', 'webmaster', 'www']);
+    const source = String(profile.businessName || profile.fullName || '');
+    const ascii = source.replace(/&/g, ' and ').replace(/['’]/g, '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+    let local = ascii.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48).replace(/-+$/g, '');
+    if (!local) local = 'studio';
+    if (reserved.has(local)) local = `${local}-studio`.slice(0, 64);
+    const cleaned = source.replace(/[\r\n]+/g, ' ').replace(/[<>"]/g, '').trim().slice(0, 60);
+    const name = cleaned || 'Your business';
+    const address = `${local}@elitequoteflow.com`;
+    return { name, address, reply: currentUser?.email || '', initials: cleaned ? name.split(/\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() : 'EQ' };
+  }
+  function showBrandedEmail() {
+    const mailbox = brandedMailbox();
+    $('#branded-email-name').textContent = mailbox.name;
+    $('#branded-email-address').textContent = mailbox.address;
+    $('#branded-email-reply').textContent = mailbox.reply || 'the email on your account';
+    $('#branded-email-avatar').textContent = mailbox.initials || 'EQ';
+    $('#branded-email-lock').hidden = isPro();
+    $('#branded-email-dialog').showModal();
+  }
+
   function showSignedIn() {
     landingScreen.hidden = true;
     authScreen.hidden = true;
@@ -1677,12 +1699,15 @@
   document.querySelectorAll('[data-feature-target]').forEach(link => link.addEventListener('click', () => {
     document.body.classList.remove('nav-open');
     const feature = link.dataset.proFeature;
-    if (feature && !isPro()) requirePro(feature);
     const action = link.dataset.featureAction;
-    if (action === 'templates' && (!feature || isPro())) $('#manage-templates-button')?.click();
-    else if (action === 'import' && (!feature || isPro())) $('#import-estimate-button')?.click();
-    else if (action === 'ai-draft' && isPro()) { $('#new-quote-button')?.click(); $('#ai-scope-draft')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-    else document.getElementById(link.dataset.featureTarget)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (action === 'branded-email') showBrandedEmail();
+    else {
+      if (feature && !isPro()) requirePro(feature);
+      if (action === 'templates' && (!feature || isPro())) $('#manage-templates-button')?.click();
+      else if (action === 'import' && (!feature || isPro())) $('#import-estimate-button')?.click();
+      else if (action === 'ai-draft' && isPro()) { $('#new-quote-button')?.click(); $('#ai-scope-draft')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      else document.getElementById(link.dataset.featureTarget)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     document.querySelectorAll('[data-feature-target]').forEach(item => item.classList.toggle('active', item === link));
   }));
   $('#pipeline-stages').addEventListener('click', event => {
@@ -2330,6 +2355,9 @@
   $('#register-signin').addEventListener('click', () => showSignedOut('signin'));
   $('#auth-mode-toggle').addEventListener('click', showRegistration);
   $('#header-profile-button').addEventListener('click', openProfileDialog);
+  $('#branded-email-close')?.addEventListener('click', () => $('#branded-email-dialog')?.close());
+  $('#branded-email-dialog')?.addEventListener('click', event => { if (event.target === $('#branded-email-dialog')) $('#branded-email-dialog').close(); });
+  $('#branded-email-profile')?.addEventListener('click', () => { $('#branded-email-dialog')?.close(); openProfileDialog(); });
   document.querySelectorAll('.profile-close').forEach(button => button.addEventListener('click', () => profileDialog.close()));
   profileDialog.addEventListener('click', event => { if (event.target === profileDialog) profileDialog.close(); });
   $('#save-profile-button').addEventListener('click', async () => {
