@@ -438,6 +438,15 @@ test('invoice checkout and send-quote-email require Pro and create Stripe or Res
  assert.equal(sentFrom,'Acme <acme@example.com>');
 });
 
+test('follow-ups send in-app and unused AI drafts stay out of the quote',async()=>{
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
+ const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ assert.match(html,/id="ai-scope-preview"/);assert.match(html,/id="ai-scope-use"/);assert.match(html,/id="ai-scope-discard"/);
+ assert.match(app,/Follow-up sent/);assert.match(app,/sendCustomerEmail\(quote, subject, body, 'Follow-up sent'\)/);
+ assert.match(app,/clearUnusedAiDraft\(\)/);assert.match(app,/It stays out of the quote until you use it/);
+ assert.doesNotMatch(app,/terms\.value = result\.reply/);
+});
+
 test('notices stay in the top layer and quote send failures stay on screen',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
  const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
