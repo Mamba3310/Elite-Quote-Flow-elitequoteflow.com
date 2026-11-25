@@ -147,7 +147,8 @@ alter table public.profiles
   add column if not exists tax_id text not null default '',
   add column if not exists default_currency text not null default 'USD',
   add column if not exists referral_credits_months integer not null default 0,
-  add column if not exists referral_reward_status text not null default 'none';
+  add column if not exists referral_reward_status text not null default 'none',
+  add column if not exists signup_ip_hash text;
 
 alter table public.profiles drop constraint if exists profiles_brand_color_check;
 alter table public.profiles add constraint profiles_brand_color_check check (brand_color ~ '^#[0-9A-Fa-f]{6}$');
@@ -333,7 +334,8 @@ alter table public.profiles
   add column if not exists company_address text not null default '',
   add column if not exists default_currency text not null default 'USD',
   add column if not exists referral_credits_months integer not null default 0,
-  add column if not exists referral_reward_status text not null default 'none';
+  add column if not exists referral_reward_status text not null default 'none',
+  add column if not exists signup_ip_hash text;
 
 alter table public.quotes drop constraint if exists quotes_line_items_array_check;
 alter table public.quotes add constraint quotes_line_items_array_check check (case when jsonb_typeof(line_items) = 'array' then jsonb_array_length(line_items) <= 100 else false end);

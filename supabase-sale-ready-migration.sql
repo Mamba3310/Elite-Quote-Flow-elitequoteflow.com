@@ -34,4 +34,5 @@ alter table public.profiles
   add column if not exists company_address text not null default '',
   add column if not exists tax_id text not null default '',
   add column if not exists referral_credits_months integer not null default 0,
-  add column if not exists referral_reward_status text not null default 'none';
+  add column if not exists referral_reward_status text not null default 'none',
+  add column if not exists signup_ip_hash text;

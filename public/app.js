@@ -4,7 +4,7 @@
   const STORAGE_KEY = 'quoteflow.quotes.v1';
   const CALCULATOR_CURRENCY_KEY = 'calculator-currency';
   const VISITOR_CURRENCY_KEY = 'quoteflow.visitor-currency';
-  const FREE_OPEN_QUOTE_LIMIT = 15;
+  const FREE_OPEN_QUOTE_LIMIT = 2;
   const FREE_LINE_ITEM_LIMIT = 1;
   const PRO_LINE_ITEM_LIMIT = 20;
   const SUPABASE_CONFIG = window.QUOTEFlow_SUPABASE_CONFIG;
@@ -303,7 +303,7 @@
 
   function renderProfile() {
     const name = formatDisplayName(profile.fullName || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0]) || 'Your profile';
-    const avatar = name.trim().split(/\\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() || 'Q';
+    const avatar = name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() || 'Q';
     $('#upgrade-strip').classList.toggle('is-pro-active', Boolean(profile.isPro));
     const eyebrow = document.querySelector('#upgrade-strip .eyebrow');
     if (eyebrow) eyebrow.textContent = profile.isStaff ? 'STAFF REVIEW' : 'ELITE QUOTE FLOW PRO';
@@ -343,7 +343,7 @@
     const freeLimitNote = $('#free-limit-note');
     if (freeLimitNote) {
       freeLimitNote.hidden = Boolean(profile.isPro);
-      freeLimitNote.textContent = `Free plan: ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes · 1 line item · mailto send. Upgrade for deposits, reminders, branding, and more.`;
+      freeLimitNote.textContent = `Free access is limited to ${FREE_OPEN_QUOTE_LIMIT} quotes. You have ${openCount} of ${FREE_OPEN_QUOTE_LIMIT}. Upgrade for deposits, reminders, branding, and more.`;
     }
     $('#header-profile-name').textContent = name;
     $('#header-profile-name').title = name;
@@ -440,6 +440,44 @@
     return { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` };
   }
 
+  function attachAddressSuggestions(input) {
+    if (!input) return;
+    const field = input.closest('.form-field') || input.parentElement;
+    const list = document.createElement('div');
+    list.className = 'address-suggestions';
+    list.hidden = true;
+    list.setAttribute('role', 'listbox');
+    field.append(list);
+    let timer = 0;
+    const close = () => { list.hidden = true; list.replaceChildren(); };
+    input.addEventListener('input', () => {
+      window.clearTimeout(timer);
+      const query = input.value.trim();
+      if (query.length < 3) { close(); return; }
+      timer = window.setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/address-suggest?q=${encodeURIComponent(query)}`);
+          const payload = await response.json();
+          const suggestions = Array.isArray(payload.suggestions) ? payload.suggestions : [];
+          if (!suggestions.length || input.value.trim() !== query) { close(); return; }
+          list.replaceChildren(...suggestions.map(label => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.setAttribute('role', 'option');
+            button.textContent = label;
+            button.addEventListener('mousedown', event => event.preventDefault());
+            button.addEventListener('click', () => { input.value = label; close(); });
+            return button;
+          }));
+          list.hidden = false;
+        } catch { close(); }
+      }, 280);
+    });
+    input.addEventListener('blur', () => window.setTimeout(close, 160));
+  }
+
+  attachAddressSuggestions(profileForm.elements.companyAddress);
+
   async function loadGrowthExtras() {
     if (!currentUser) return;
     try {
@@ -498,11 +536,59 @@
     }
   }
 
+  function showCompanyLogo(url) {
+    const preview = $('#company-logo-preview');
+    const remove = $('#company-logo-remove');
+    profileForm.elements.companyLogoUrl.value = url || '';
+    if (!preview || !remove) return;
+    if (url) {
+      preview.src = url;
+      preview.hidden = false;
+      remove.hidden = false;
+    } else {
+      preview.removeAttribute('src');
+      preview.hidden = true;
+      remove.hidden = true;
+    }
+  }
+
+  function readLogoFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve('');
+      if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return reject(new Error('Upload a PNG, JPG, WebP, or GIF logo.'));
+      if (file.size > 5 * 1024 * 1024) return reject(new Error('That logo is larger than 5 MB. Choose a smaller image.'));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read that logo.'));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('Could not open that logo.'));
+        image.onload = () => {
+          const scale = Math.min(1, 360 / image.width, 160 / image.height);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+          const keepPng = /png|webp|gif/.test(file.type);
+          let url = canvas.toDataURL(keepPng ? 'image/png' : 'image/jpeg', 0.82);
+          if (url.length > 120000) url = canvas.toDataURL('image/jpeg', 0.72);
+          if (url.length > 120000) return reject(new Error('That logo is still too large after resizing. Try a simpler image.'));
+          resolve(url);
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  let logoUpload = Promise.resolve();
+
   function openProfileDialog() {
     profileForm.elements.fullName.value = formatDisplayName(profile.fullName || currentUser?.user_metadata?.full_name || '');
     profileForm.elements.businessName.value = profile.businessName || currentUser?.user_metadata?.business_name || '';
     profileForm.elements.phone.value = profile.phone || currentUser?.user_metadata?.phone || '';
-    profileForm.elements.companyLogoUrl.value = profile.companyLogoUrl || '';
+    showCompanyLogo(profile.companyLogoUrl || '');
+    const logoFile = $('#company-logo-file');
+    if (logoFile) logoFile.value = '';
     profileForm.elements.brandColor.value = profile.brandColor || '#426DDE';
     profileForm.elements.companyAddress.value = profile.companyAddress || '';
     if (profileForm.elements.taxId) profileForm.elements.taxId.value = profile.taxId || '';
@@ -528,7 +614,7 @@
         full_name: values.fullName,
         business_name: values.businessName,
         phone: values.phone,
-        company_logo_url: values.companyLogoUrl,
+        company_logo_url: values.companyLogoUrl.startsWith('data:') ? '' : values.companyLogoUrl,
         brand_color: values.brandColor,
         company_address: values.companyAddress,
         tax_id: values.taxId
@@ -1066,6 +1152,22 @@
     showAuthError('Email verified. Sign in to open your desk.', 'success');
   }
 
+  let networkLimitMessage = '';
+
+  async function claimNetworkAccount() {
+    if (!currentUser) return true;
+    try {
+      const response = await fetch('/api/account-slot', { method: 'POST', headers: await authHeaders() });
+      if (response.status !== 403) return true;
+      const payload = await response.json().catch(() => ({}));
+      networkLimitMessage = payload.error || 'This network already has two free accounts. Sign in to an existing account.';
+      await supabaseClient.auth.signOut();
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
   async function startApplication() {
     if (!window.supabase || !SUPABASE_CONFIG?.url || !SUPABASE_CONFIG?.anonKey) {
       showLanding();
@@ -1097,6 +1199,7 @@
         showSignedIn();
         if (!callback.consumed && ['signup', 'email', 'magiclink', 'invite'].includes(callback.type)) showToast('Email verified. Welcome to Elite Quote Flow.');
         await fetchProfile();
+        if (!(await claimNetworkAccount())) return;
         await loadCalculatorPreferences(currentUser.id);
         await initializeOwnerAnalytics();
         await refreshQuotes();
@@ -1134,13 +1237,18 @@
         render();
         $('#header-profile-name').textContent = 'Your profile';
         $('#header-profile-avatar').textContent = 'Q';
-        if (keepVerifiedSignIn) showVerifiedSignIn();
+        if (networkLimitMessage) {
+          showSignedOut('signin');
+          showAuthError(networkLimitMessage);
+          networkLimitMessage = '';
+        } else if (keepVerifiedSignIn) showVerifiedSignIn();
         else showLanding();
       } else if (nextUser.id !== previousId) {
         showSignedIn();
         window.setTimeout(async () => {
           if (currentUser?.id !== nextUser.id) return;
           await fetchProfile();
+          if (!(await claimNetworkAccount())) return;
           await loadCalculatorPreferences(nextUser.id);
           await initializeOwnerAnalytics();
           await refreshQuotes();
@@ -2376,6 +2484,8 @@
     button.disabled = true;
     button.textContent = 'Creating account…';
     try {
+      const allowance = await fetch('/api/account-slot').then(response => response.json()).catch(() => ({ allowed: true }));
+      if (allowance.allowed === false) throw new Error(allowance.error || 'This network already has two free accounts. Sign in to an existing account.');
       const { data, error } = await supabaseClient.auth.signUp({
         email: $('#register-email').value.trim(),
         password,
@@ -2422,6 +2532,10 @@
     button.disabled = true;
     button.textContent = 'Connecting to Google…';
     try {
+      if (registerVisible) {
+        const allowance = await fetch('/api/account-slot').then(response => response.json()).catch(() => ({ allowed: true }));
+        if (allowance.allowed === false) throw new Error(allowance.error || 'This network already has two free accounts. Sign in to an existing account.');
+      }
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: `${window.location.origin}/` }
@@ -2574,6 +2688,25 @@
   $('#branded-email-close')?.addEventListener('click', () => $('#branded-email-dialog')?.close());
   $('#branded-email-dialog')?.addEventListener('click', event => { if (event.target === $('#branded-email-dialog')) $('#branded-email-dialog').close(); });
   $('#branded-email-profile')?.addEventListener('click', () => { $('#branded-email-dialog')?.close(); openProfileDialog(); });
+  $('#company-logo-file')?.addEventListener('change', () => {
+    const file = $('#company-logo-file').files?.[0];
+    const field = $('#company-logo-field');
+    const fieldError = field?.querySelector('.field-error');
+    if (fieldError) fieldError.textContent = '';
+    if (!file) return;
+    logoUpload = readLogoFile(file).then(url => {
+      showCompanyLogo(url);
+      $('#company-logo-file').value = '';
+    }).catch(error => {
+      if (fieldError) fieldError.textContent = error.message || 'Could not use that logo.';
+      $('#company-logo-file').value = '';
+    });
+  });
+  $('#company-logo-remove')?.addEventListener('click', () => {
+    showCompanyLogo('');
+    const file = $('#company-logo-file');
+    if (file) file.value = '';
+  });
   document.querySelectorAll('.profile-close').forEach(button => button.addEventListener('click', () => profileDialog.close()));
   profileDialog.addEventListener('click', event => { if (event.target === profileDialog) profileDialog.close(); });
   $('#save-profile-button').addEventListener('click', async () => {
@@ -2607,6 +2740,7 @@
     button.disabled = true;
     button.textContent = 'Saving…';
     try {
+      await logoUpload;
       const resultMessage = await saveProfile({ fullName, businessName: profileForm.elements.businessName.value.trim(), phone: profileForm.elements.phone.value.trim(), companyLogoUrl: profileForm.elements.companyLogoUrl.value.trim(), brandColor: profileForm.elements.brandColor.value, companyAddress: profileForm.elements.companyAddress.value.trim(), taxId: profileForm.elements.taxId.value.trim(), email });
       saveError.textContent = resultMessage;
       saveError.hidden = false;

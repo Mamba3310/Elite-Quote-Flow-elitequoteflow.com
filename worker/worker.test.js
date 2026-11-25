@@ -104,6 +104,12 @@ test('sidebar promotes the AI assistant without the redundant growth slogan card
  assert.match(app,/Email verified\. Sign in to open your desk\./);assert.match(app,/verifyOtp\(\{ token_hash: callback\.tokenHash, type: callback\.type \}\)/);assert.match(app,/function renderAcceptedTotal/);assert.match(app,/renderAcceptedTotal\(\$\('#metric-won'\), wonThisMonth\)/);assert.match(css,/\.metric-value\.is-split/);assert.match(css,/\.metric-currency-line/);
 });
 
+test('company logo is uploaded from the computer instead of a web link',async()=>{
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ assert.match(html,/id="company-logo-file" type="file"/);assert.match(html,/id="company-logo-preview"/);assert.doesNotMatch(html,/Company logo URL/);assert.doesNotMatch(html,/name="companyLogoUrl" type="url"/);
+ assert.match(app,/function readLogoFile/);assert.match(app,/toDataURL/);assert.match(app,/startsWith\('data:'\)/);
+});
+
 test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');
  for (const label of ['Overview','Quotes','Follow-ups','Calendar','Calculator','Templates','Import estimate','Customer history','Invoices','Appointments']) assert.match(html,new RegExp(`>${label}(?: <span|</button>)`));
@@ -778,4 +784,52 @@ test('signup and Google confirmation mail names Elite Quote Flow and stays on th
  assert.equal(sent.from, 'Elite Quote Flow <welcome@elitequoteflow.com>');
  assert.equal(sent.subject, 'Sign in to Elite Quote Flow');
  assert.doesNotMatch(sent.text, /supabase\.co/);
+});
+
+test('address suggestions come from the worker and free accounts stop at two quotes and two per network', async () => {
+ const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+ const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+ const schema = await readFile(new URL('../supabase-schema.sql', import.meta.url), 'utf8');
+ assert.match(html, /Up to 2 open quotes/);
+ assert.doesNotMatch(html, /CSV file|ICS file|VCF file/);
+ assert.match(app, /const FREE_OPEN_QUOTE_LIMIT = 2/);
+ assert.match(app, /Free access is limited to \$\{FREE_OPEN_QUOTE_LIMIT\} quotes/);
+ assert.match(app, /split\(\/\\s\+\/\)/);
+ assert.match(app, /\/api\/address-suggest/);
+ assert.match(app, /\/api\/account-slot/);
+ assert.match(schema, /signup_ip_hash text/);
+ await withMockedFetch(async () => Response.json({ features: [{ properties: { housenumber: '12', street: 'Main Street', city: 'Austin', postcode: '78701', country: 'United States' } }] }), async () => {
+  const response = await worker.fetch(new Request('https://elitequoteflow.com/api/address-suggest?q=12%20Main'));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.suggestions[0], '12 Main Street, 78701, Austin, United States');
+ });
+ const user = { id: 'user-3', email: 'new@example.com' };
+ await withMockedFetch(async url => {
+  const target = String(url);
+  if (target.endsWith('/auth/v1/user')) return Response.json(user);
+  if (target.includes('signup_ip_hash')) return Response.json([{ id: 'user-1' }, { id: 'user-2' }]);
+  if (target.includes('is_pro')) return Response.json([{ is_pro: false }]);
+  return Response.json({});
+ }, async () => {
+  const open = await worker.fetch(new Request('https://elitequoteflow.com/api/account-slot', { headers: { 'CF-Connecting-IP': '203.0.113.10' } }), baseEnv);
+  assert.equal(open.status, 200);
+  assert.equal((await open.json()).allowed, false);
+  const blocked = await worker.fetch(new Request('https://elitequoteflow.com/api/account-slot', { method: 'POST', headers: { Authorization: 'Bearer session', 'CF-Connecting-IP': '203.0.113.10' } }), baseEnv);
+  assert.equal(blocked.status, 403);
+  const body = await blocked.json();
+  assert.equal(body.allowed, false);
+  assert.doesNotMatch(JSON.stringify(body), /203\.0\.113\.10/);
+ });
+ await withMockedFetch(async url => {
+  const target = String(url);
+  if (target.endsWith('/auth/v1/user')) return Response.json({ id: 'user-1', email: 'owner@example.com' });
+  if (target.includes('signup_ip_hash')) return Response.json([{ id: 'user-1' }, { id: 'user-2' }]);
+  if (target.includes('is_pro')) return Response.json([{ is_pro: false }]);
+  return Response.json({});
+ }, async () => {
+  const existing = await worker.fetch(new Request('https://elitequoteflow.com/api/account-slot', { method: 'POST', headers: { Authorization: 'Bearer session', 'CF-Connecting-IP': '203.0.113.10' } }), baseEnv);
+  assert.equal(existing.status, 200);
+  assert.equal((await existing.json()).allowed, true);
+ });
 });
