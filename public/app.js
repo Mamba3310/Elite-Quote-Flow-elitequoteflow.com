@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'quoteflow.quotes.v1';
   const CALCULATOR_CURRENCY_KEY = 'calculator-currency';
-  const FREE_OPEN_QUOTE_LIMIT = 15;
+  const FREE_OPEN_QUOTE_LIMIT = 5;
   const FREE_LINE_ITEM_LIMIT = 1;
   const PRO_LINE_ITEM_LIMIT = 20;
   const SUPABASE_CONFIG = window.QUOTEFlow_SUPABASE_CONFIG;
