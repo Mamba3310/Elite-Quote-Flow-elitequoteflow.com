@@ -103,6 +103,13 @@ test('sidebar promotes the AI assistant without the redundant growth slogan card
  assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.sidebar-bottom\{margin-top:auto/);assert.match(css,/NEED A HAND/);
 });
 
+test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',async()=>{
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');
+ for (const label of ['Overview','Quotes','Follow-ups','Calendar','Calculator','Templates','Import estimate','Customer history','Invoices','Appointments']) assert.match(html,new RegExp(`>${label}(?: <span|</button>)`));
+ for (const label of ['Branded email','Deposits','Multi-item quotes','Auto reminders','AI drafting','Exports','Teams','Collect invoices','Recurring','Referrals']) assert.match(html,new RegExp(`${label} <span class="pro-badge">PRO</span>`));
+ assert.match(html,/data-pro-feature="Team invites"/);assert.match(app,/if \(feature && !isPro\(\)\) requirePro\(feature\)/);assert.match(app,/button\.hidden = false/);assert.match(app,/if \(!requirePro\('Quote export'\)\) return/);assert.match(css,/\.nav-link\.is-locked \.pro-badge/);
+});
+
 test('calculator currency control offers supported currencies and updates results and estimate currency',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
  assert.match(html,/<select id="calc-currency" class="calculator-badge" aria-label="Calculator currency"><\/select>/);assert.match(html,/id="calc-currency-symbol-rate"/);assert.match(html,/id="calc-currency-symbol-materials"/);
@@ -199,6 +206,7 @@ test('landing page shows an honest sample preview, signup CTAs, interactive valu
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/landing-refresh.css',import.meta.url),'utf8');
  assert.match(css,/\.lead-calculator/);assert.match(html,/Send the quote/);assert.match(html,/PRODUCT PREVIEW/);assert.match(html,/id="lead-calc-quotes"/);assert.match(html,/id="lead-calc-amount"/);assert.match(html,/id="lead-calc-result"/);assert.match(html,/id="landing-steps-cta"/);assert.match(html,/id="landing-pricing-cta"/);assert.match(html,/FREE TO START/);assert.match(html,/landing-pricing-grid/);assert.match(html,/Stripe deposits and invoice balance collection/);assert.match(html,/No sample or invented reviews are displayed/);assert.doesNotMatch(html,/Prototype preview/);assert.match(app,/updateLeadEstimate/);assert.match(app,/landing-calc-cta/);assert.match(app,/landing-pricing-cta/);assert.match(app,/Create an account/);
  assert.match(html,/id="customer-review-form"/);assert.match(html,/id="published-customer-reviews"/);assert.match(html,/id="team-panel"/);assert.match(html,/id="referral-panel"/);assert.match(app,/api\/customer-reviews/);assert.match(app,/api\/send-quote-email/);assert.match(app,/api\/invoice-checkout/);assert.match(app,/FREE_OPEN_QUOTE_LIMIT/);assert.match(app,/review\.review_text/);assert.doesNotMatch(app,/review\.customer_email/);
+ assert.match(html,/From the first quote to the customer/);assert.match(html,/Follow up before the quote goes quiet/);assert.match(html,/id="welcome-subtitle"/);assert.match(app,/function updateDeskIntro/);assert.match(app,/check in before a job goes quiet/);
 });
 
 test('dashboard offers distinct monthly and lifetime purchase options',async()=>{
