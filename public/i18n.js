@@ -2,12 +2,12 @@
   'use strict';
 
   const LANGUAGES = [
-    ['en', 'English'],
-    ['fr', 'Français'],
-    ['es', 'Español'],
-    ['pt', 'Português'],
-    ['zh', '中文'],
-    ['yo', 'Yorùbá']
+    ['en', 'English', 'us'],
+    ['fr', 'Français', 'fr'],
+    ['es', 'Español', 'es'],
+    ['pt', 'Português', 'br'],
+    ['zh', '中文', 'cn'],
+    ['yo', 'Yorùbá', 'ng']
   ];
   const rows = [
     ['Language', 'Langue', 'Idioma', 'Idioma', '语言', 'Èdè'],
@@ -16,7 +16,6 @@
     ['Start free', 'Commencer gratuitement', 'Empezar gratis', 'Começar grátis', '免费开始', 'Bẹ̀rẹ̀ lọ́fẹ̀ẹ́'],
     ['For landscapers', 'Pour les paysagistes', 'Para paisajistas', 'Para paisagistas', '面向园艺公司', 'Fún àwọn olùtọ́jú ọgbà'],
     ['All service pros', 'Tous les services', 'Todos los oficios', 'Todos os serviços', '所有服务行业', 'Gbogbo iṣẹ́'],
-    ['Ask Olivia', 'Demander à Olivia', 'Preguntar a Olivia', 'Falar com a Olivia', '询问 Olivia', 'Bèèrè lọ́wọ́ Olivia'],
     ['Send the quote.', 'Envoyez le devis.', 'Envíe el presupuesto.', 'Envie o orçamento.', '发送报价。', 'Fi ìdíyelé ránṣẹ́.'],
     ['Win the follow-up.', 'Gagnez le suivi.', 'Gane el seguimiento.', 'Ganhe o acompanhamento.', '赢得后续跟进。', 'Jèrè àtẹ̀lé.'],
     ['Create your free account', 'Créer votre compte gratuit', 'Cree su cuenta gratis', 'Crie sua conta grátis', '创建免费账户', 'Ṣẹ̀dá àkántì ọ̀fẹ́ẹ́ rẹ'],
@@ -35,7 +34,6 @@
     ['Import estimate', 'Importer un devis', 'Importar un presupuesto', 'Importar um orçamento', '导入估价', 'Gbé ìdíyelé wọlé'],
     ['Invite a friend', 'Inviter un ami', 'Invitar a un amigo', 'Convidar um amigo', '邀请朋友', 'Pè ọ̀rẹ́'],
     ['Online now', 'En ligne', 'En línea', 'Online agora', '当前在线', 'Ó wà báyìí'],
-    ['Hi, I’m Olivia. Here’s what I can do:', 'Bonjour, je suis Olivia. Voici ce que je peux faire :', 'Hola, soy Olivia. Esto es lo que puedo hacer:', 'Olá, eu sou a Olivia. Veja o que posso fazer:', '你好，我是 Olivia。我可以做这些：', 'Báwo, èmi ni Olivia. Èyí ni ohun tí mo lè ṣe:'],
     ['Free is included', 'Le gratuit est inclus', 'Lo gratis está incluido', 'O grátis está incluído', '已包含免费功能', 'Ọ̀fẹ́ẹ́ wà nínú'],
     ['on every account', 'sur chaque compte', 'en cada cuenta', 'em cada conta', '在每个账户中', 'gbogbo àkántì'],
     ['Cloud sync', 'Cloud', 'Nube', 'Nuvem', '云同步', 'Àwọsánmà'],
@@ -68,7 +66,6 @@
     ['Sort', 'Trier', 'Ordenar', 'Ordenar', '排序', 'Ṣàtò'],
     ['Today', 'Aujourd’hui', 'Hoy', 'Hoje', '今天', 'Òní'],
     ['Need a hand?', 'Besoin d’aide ?', '¿Necesita ayuda?', 'Precisa de ajuda?', '需要帮忙吗？', 'Ṣé o nílò ìrànlọ́wọ́?'],
-    ['I’m Olivia. I can walk you through it.', 'Je suis Olivia. Je peux vous guider.', 'Soy Olivia. Puedo guiarle.', 'Eu sou a Olivia. Posso orientar você.', '我是 Olivia。我可以带你了解。', 'Èmi ni Olivia. Mo lè ṣe àfihàn rẹ̀ fún ọ.'],
     ['Yes, help me', 'Oui, aidez-moi', 'Sí, ayúdeme', 'Sim, me ajude', '好，帮帮我', 'Bẹ́ẹ̀ni, ràn mí lọ́wọ́'],
     ['Not now', 'Pas maintenant', 'Ahora no', 'Agora não', '暂时不用', 'Kì í ṣe nísinsìnyí'],
     ['Ask me a question.', 'Posez-moi une question.', 'Hágame una pregunta.', 'Faça uma pergunta.', '问我一个问题。', 'Bèèrè ìbéèrè lọ́wọ́ mi.'],
@@ -109,7 +106,7 @@
   const reverse = Object.fromEntries(codes.map(code => [code, new Map(Object.entries(phrases[code]).map(([english, value]) => [value, english]))]));
   const english = new Set(rows.map(row => row[0]));
   let current = 'en';
-  const skip = '.language-switch, #quote-rows, #invoice-rows, #customer-history, #history-detail, #recurring-list, #booking-list, #growth-report, #team-members-list, #template-list, #toast';
+  const skip = '.language-switch, [data-assistant], #quote-rows, #invoice-rows, #customer-history, #history-detail, #recurring-list, #booking-list, #growth-report, #team-members-list, #template-list, #toast';
 
   function sourceOf(text) {
     if (english.has(text)) return text;
@@ -163,6 +160,58 @@
     document.head.appendChild(link);
   }
 
+  function paintLanguageSwitch(select) {
+    const label = select.closest('.language-switch');
+    if (!label) return;
+    let menu = label.querySelector('.language-menu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.className = 'language-menu';
+      const currentButton = document.createElement('button');
+      currentButton.type = 'button';
+      currentButton.className = 'language-current';
+      currentButton.setAttribute('aria-haspopup', 'listbox');
+      currentButton.setAttribute('aria-expanded', 'false');
+      const list = document.createElement('div');
+      list.className = 'language-list';
+      list.setAttribute('role', 'listbox');
+      list.setAttribute('aria-label', 'Language');
+      menu.append(currentButton, list);
+      label.append(menu);
+      currentButton.addEventListener('click', () => {
+        const open = menu.classList.toggle('open');
+        currentButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      document.addEventListener('click', event => {
+        if (!label.contains(event.target)) {
+          menu.classList.remove('open');
+          currentButton.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+    const list = menu.querySelector('.language-list');
+    list.replaceChildren(...LANGUAGES.map(([code, name, flag]) => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'language-option';
+      option.dataset.lang = code;
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', code === current ? 'true' : 'false');
+      option.innerHTML = `<img src="flags/${flag}.svg" alt="" width="18" height="12"><span></span>`;
+      option.querySelector('span').textContent = name;
+      option.addEventListener('click', () => {
+        menu.classList.remove('open');
+        menu.querySelector('.language-current').setAttribute('aria-expanded', 'false');
+        setLanguage(code);
+      });
+      return option;
+    }));
+    const chosen = LANGUAGES.find(([code]) => code === current) || LANGUAGES[0];
+    const currentButton = menu.querySelector('.language-current');
+    currentButton.innerHTML = `<img src="flags/${chosen[2]}.svg" alt="" width="18" height="12"><span></span>`;
+    currentButton.querySelector('span').textContent = chosen[1];
+    currentButton.setAttribute('aria-label', chosen[1]);
+  }
   function fillSelects() {
     document.querySelectorAll('.language-switch-select').forEach(select => {
       if (!select.options.length) {
@@ -170,6 +219,7 @@
         select.addEventListener('change', () => setLanguage(select.value));
       }
       select.value = current;
+      paintLanguageSwitch(select);
     });
   }
 
