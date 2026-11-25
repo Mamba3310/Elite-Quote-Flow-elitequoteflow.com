@@ -3,7 +3,14 @@ const MAX_HISTORY = 12;
 const DEFAULT_AI_MODEL = '@cf/openai/gpt-oss-20b';
 const AI_MODEL_FALLBACK = '@cf/ibm-granite/granite-4.0-h-micro';
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
-const SUPPORT_PROMPT = `You are Olivia, the Elite Quote Flow customer support assistant, available any time. Introduce yourself as Olivia. Help customers and service-business owners use Elite Quote Flow. Be concise, warm, and practical. Explain quote links, accepting or declining quotes, deposits, follow-ups, templates, invoice status, exports, and account access. Never claim to access or change an account, payment, quote, or booking. Never ask for passwords, card numbers, signatures, or sensitive personal data. For account-specific or payment problems, explain how to contact the business that sent the quote or use the signed-in account's existing support channel. Do not invent policies, prices, or business-specific commitments. If uncertain, say so and suggest contacting the business directly.`;
+const ASSISTANTS = { en: 'Stacey', fr: 'Camille', es: 'Lucía', pt: 'Beatriz', zh: 'Mei', yo: 'Funke' };
+function assistantName(language) {
+  const code = String(language || 'en').toLowerCase().slice(0, 2);
+  return ASSISTANTS[code] || ASSISTANTS.en;
+}
+function supportPrompt(name) {
+  return `You are ${name}, the Elite Quote Flow customer support assistant, available any time. Introduce yourself as ${name}. Help customers and service-business owners use Elite Quote Flow. Be concise, warm, and practical. Explain quote links, accepting or declining quotes, deposits, follow-ups, templates, invoice status, exports, and account access. Never claim to access or change an account, payment, quote, or booking. Never ask for passwords, card numbers, signatures, or sensitive personal data. For account-specific or payment problems, explain how to contact the business that sent the quote or use the signed-in account's existing support channel. Do not invent policies, prices, or business-specific commitments. If uncertain, say so and suggest contacting the business directly.`;
+}
 const DRAFT_PROMPT = `You help service-business owners draft customer-ready quote scopes. Turn their job notes into a clear, concise, professional scope. Preserve only facts they provide. Do not invent prices, guarantees, schedules, licenses, or included work. If details are missing, list them as questions instead of making assumptions.`;
 function normalizeMessages(input) {
   if (!Array.isArray(input)) return null;
@@ -15,12 +22,12 @@ function normalizeMessages(input) {
   });
   return messages.length && messages.every(Boolean) && messages.at(-1).role === 'user' ? messages : null;
 }
-function productHelpFallback(messages, mode) {
+function productHelpFallback(messages, mode, name = 'Stacey') {
   const question = messages.at(-1)?.content.toLowerCase() || '';
   if (mode === 'draft') return 'I could not reach the drafting model just now. Write a short scope with the service, included work, exclusions, and any assumptions. Avoid adding prices or guarantees you have not confirmed, then try AI drafting again later.';
   if (/quote|proposal|estimate/.test(question) && /create|new|make|send|share|link/.test(question)) return 'To create a quote, sign in and select “New quote.” Add the customer, service, amount, follow-up date, and terms, then save. Use the link action to copy a customer link, or print to save a proposal as PDF.';
   if (/accept|approve|sign|decline/.test(question)) return 'Open the quote link from the business. Review the scope and amount, then enter your name and draw your signature to accept. You can also decline and optionally share a reason. Contact the business directly if you need a change.';
-  if (/deposit|payment|pay|invoice|billing/.test(question)) return 'A quote may include a secure deposit link if the business enabled one. For invoice balances, billing changes, refunds, or payment problems, contact the business that sent the quote; Olivia cannot view or change payment records.';
+  if (/deposit|payment|pay|invoice|billing/.test(question)) return `A quote may include a secure deposit link if the business enabled one. For invoice balances, billing changes, refunds, or payment problems, contact the business that sent the quote; ${name} cannot view or change payment records.`;
   if (/follow.?up|reminder|calendar/.test(question)) return 'In your signed-in workspace, set a follow-up date on each quote. The dashboard and calendar show what is due; browser reminders can be enabled from the calendar. Email nudges run only when the business has configured email delivery.';
   if (/template/.test(question)) return 'In the signed-in workspace, select “Templates” above the quotes list to save common services, pricing, and terms. Choose a saved template while creating a quote.';
   if (/customer|history|note|recurring|repeat|appointment|booking|schedule/.test(question)) return 'The workspace includes customer history and private notes, recurring-service tracking, and appointment requests on accepted quote links. Appointment dates are requests, not confirmed bookings; the business must confirm availability.';
@@ -28,7 +35,7 @@ function productHelpFallback(messages, mode) {
   if (/pro|upgrade|pricing|plan|free/.test(question)) return 'Free includes up to 2 open quotes, quote links, e-sign, follow-ups, and mailto send. Pro adds deposits, invoice collection, branded email, auto reminders, multi-item quotes, branding, AI drafting, exports, teams, referrals, and recurring auto-quotes for $14.99/month or $149.99 lifetime.';
   if (/team|invite|referral/.test(question)) return 'Pro includes team invites from the Teams panel. Referral links earn one month of Pro credit when a referred business upgrades. Apply a code from the Referrals panel or by signing up with a ?ref= link.';
   if (/account|sign.?in|password|login/.test(question)) return 'Use the Sign in link on the landing page. If you cannot access your account, use “Forgot password?” on the sign-in form. Never send your password or payment details in chat.';
-  return 'I’m Olivia. I can help with creating and sharing quotes, accepting a quote, deposits, follow-ups, templates, exports, Pro plans, teams, and recurring services. Tell me which part you are trying to do. For quote-specific changes or payment issues, contact the business that sent the quote.';
+  return `I’m ${name}. I can help with creating and sharing quotes, accepting a quote, deposits, follow-ups, templates, exports, Pro plans, teams, and recurring services. Tell me which part you are trying to do. For quote-specific changes or payment issues, contact the business that sent the quote.`;
 }
 function modelReply(result) {
   if (!result) return '';
@@ -76,13 +83,14 @@ export async function onSupportChat(request, env) {
   const messages = normalizeMessages(input?.messages);
   if (!messages) return json({ error: 'Send up to 12 short chat messages, ending with a user question.' }, 400);
   const mode = input?.mode === 'draft' ? 'draft' : 'support';
-  const system = mode === 'draft' ? DRAFT_PROMPT : SUPPORT_PROMPT;
+  const name = assistantName(input?.language);
+  const system = mode === 'draft' ? DRAFT_PROMPT : supportPrompt(name);
   try {
     const reply = await askModel(env, [{ role: 'system', content: system }, ...messages]);
     if (reply) return json({ reply, mode: 'ai' });
-    return json({ reply: productHelpFallback(messages, mode), mode: 'help-fallback' });
+    return json({ reply: productHelpFallback(messages, mode, name), mode: 'help-fallback' });
   } catch (error) {
     console.error('Support assistant provider failed; using product guidance fallback:', error.message);
-    return json({ reply: productHelpFallback(messages, mode), mode: 'help-fallback' });
+    return json({ reply: productHelpFallback(messages, mode, name), mode: 'help-fallback' });
   }
 }

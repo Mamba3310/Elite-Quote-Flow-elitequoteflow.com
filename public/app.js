@@ -227,7 +227,29 @@
     const name = greetingName();
     $('#greeting-text').textContent = name ? `${greeting}, ${name}` : greeting;
   }
-  window.eqfOnLanguage = updateGreeting;
+  const ASSISTANTS = {
+    en: { name: 'Stacey', image: 'assistant-stacey.webp', ask: 'Ask Stacey', greet: 'Hi, I’m Stacey. Here’s what I can do:', nudge: 'I’m Stacey. I can walk you through it.' },
+    fr: { name: 'Camille', image: 'assistant-camille.webp', ask: 'Demander à Camille', greet: 'Bonjour, je suis Camille. Voici ce que je peux faire :', nudge: 'Je suis Camille. Je peux vous guider.' },
+    es: { name: 'Lucía', image: 'assistant-lucia.webp', ask: 'Preguntar a Lucía', greet: 'Hola, soy Lucía. Esto es lo que puedo hacer:', nudge: 'Soy Lucía. Puedo guiarle.' },
+    pt: { name: 'Beatriz', image: 'assistant-beatriz.webp', ask: 'Falar com a Beatriz', greet: 'Olá, eu sou a Beatriz. Veja o que posso fazer:', nudge: 'Eu sou a Beatriz. Posso orientar você.' },
+    zh: { name: 'Mei', image: 'assistant-mei.webp', ask: '询问 Mei', greet: '你好，我是 Mei。我可以做这些：', nudge: '我是 Mei。我可以带你了解。' },
+    yo: { name: 'Funke', image: 'assistant-funke.webp', ask: 'Bèèrè lọ́wọ́ Funke', greet: 'Báwo, èmi ni Funke. Èyí ni ohun tí mo lè ṣe:', nudge: 'Èmi ni Funke. Mo lè ṣe àfihàn rẹ̀ fún ọ.' }
+  };
+  function applyAssistant() {
+    const code = (document.documentElement.lang || 'en').slice(0, 2);
+    const assistant = ASSISTANTS[code] || ASSISTANTS.en;
+    document.querySelectorAll('.ai-avatar img').forEach(img => { img.src = assistant.image; });
+    document.querySelectorAll('[data-assistant="name"]').forEach(node => { node.textContent = assistant.name; });
+    document.querySelectorAll('[data-assistant="greet"]').forEach(node => { node.textContent = assistant.greet; });
+    document.querySelectorAll('[data-assistant="nudge"]').forEach(node => { node.textContent = assistant.nudge; });
+    document.querySelectorAll('[data-assistant="label"]').forEach(node => { node.setAttribute('aria-label', assistant.name); });
+    document.querySelectorAll('[data-assistant="ask"]').forEach(node => {
+      const arrow = node.querySelector('span');
+      node.textContent = assistant.ask + (arrow ? ' ' : '');
+      if (arrow) node.append(arrow);
+    });
+  }
+  window.eqfOnLanguage = () => { updateGreeting(); applyAssistant(); };
   function updateDeskIntro(openQuotes, dueQuotes) {
     const subtitle = $('#welcome-subtitle');
     if (!subtitle) return;
@@ -3105,7 +3127,7 @@
     send.disabled = true;
     send.textContent = 'Thinking…';
     try {
-      const response = await fetch('/api/support-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: supportHistory }) });
+      const response = await fetch('/api/support-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: supportHistory, language: document.documentElement.lang || 'en' }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Support is temporarily unavailable.');
       supportHistory.push({ role: 'assistant', content: result.reply });
