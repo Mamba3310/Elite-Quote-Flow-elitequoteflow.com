@@ -7,6 +7,7 @@ import { runScheduled } from './scheduled.js';
 import { onDepositCheckout } from './deposit-checkout.js';
 import { onInvoiceCheckout } from './invoice-checkout.js';
 import { onSendQuoteEmail } from './send-quote-email.js';
+import { onAuthEmail } from './auth-email.js';
 import { onTeamsRequest } from './teams.js';
 import { onReferralsRequest } from './referrals.js';
 import { onSupportChat } from './support-chat.js';
@@ -75,6 +76,7 @@ export default {
       if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
       return onSendQuoteEmail(request, env);
     }
+    if (url.pathname === '/api/auth-email') return onAuthEmail(request, env);
     if (url.pathname === '/api/teams' || url.pathname === '/api/teams/accept') {
       return onTeamsRequest(request, env);
     }

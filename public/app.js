@@ -99,9 +99,10 @@
     status.classList.toggle('sync-error', isError);
   }
 
-  function showAuthError(message) {
+  function showAuthError(message, tone = 'error') {
     authError.textContent = message;
     authError.hidden = !message;
+    authError.classList.toggle('is-success', tone === 'success' && Boolean(message));
   }
 
   function showLanding() {
@@ -140,6 +141,7 @@
     authForm.dataset.mode = mode;
     authError.hidden = true;
     authError.textContent = '';
+    authError.classList.remove('is-success');
     $('#register-error').hidden = true;
     $('#register-error').textContent = '';
   }
@@ -955,34 +957,64 @@
     }
   }
 
+  let keepVerifiedSignIn = false;
+  function showVerifiedSignIn() {
+    keepVerifiedSignIn = true;
+    showSignedOut('signin');
+    showAuthError('Email verified. Sign in to open your desk.', 'success');
+  }
+
   async function startApplication() {
     if (!window.supabase || !SUPABASE_CONFIG?.url || !SUPABASE_CONFIG?.anonKey) {
       showLanding();
       showToast('Sign-in service is not configured. Please try again later.');
       return;
     }
+    const callback = window.EliteQuoteFlowAuth?.read(window.location.href) || {};
+    if (callback.consumed) window.history.replaceState({}, '', window.EliteQuoteFlowAuth.cleanError(window.location.href));
     supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
+    let verifyError = '';
     try {
+      if (callback.tokenHash && callback.type) {
+        const { error } = await supabaseClient.auth.verifyOtp({ token_hash: callback.tokenHash, type: callback.type });
+        window.history.replaceState({}, '', window.EliteQuoteFlowAuth.cleanVerify(window.location.href));
+        if (error) {
+          verifyError = error.message || 'Could not verify that email.';
+          callback.consumed = callback.consumed || window.EliteQuoteFlowAuth.consumedText(verifyError);
+        }
+      }
       const { data, error } = await supabaseClient.auth.getSession();
       if (error) throw error;
       currentUser = data.session?.user || null;
       await recordPageVisit();
-      if (currentUser) {
+      if (callback.type === 'recovery' && currentUser) {
+        showSignedOut('recovery');
+      } else if (currentUser) {
         showSignedIn();
+        if (!callback.consumed && ['signup', 'email', 'magiclink', 'invite'].includes(callback.type)) showToast('Email verified. Welcome to Elite Quote Flow.');
         loadCalculatorPreferences(currentUser.id);
         await fetchProfile();
         await initializeOwnerAnalytics();
         await refreshQuotes();
         await handleCheckoutReturn();
         offerLocalImport();
+      } else if (callback.consumed && callback.type !== 'recovery') {
+        showVerifiedSignIn();
+      } else if (verifyError) {
+        showSignedOut('signin');
+        showAuthError(verifyError);
       } else {
         showLanding();
       }
     } catch (error) {
-      showLanding();
-      showToast(`Could not connect to the sign-in service: ${error.message}`, 6000);
+      if (window.EliteQuoteFlowAuth?.consumedText(error.message) && callback.type !== 'recovery') {
+        showVerifiedSignIn();
+      } else {
+        showLanding();
+        showToast(`Could not connect to the sign-in service: ${error.message}`, 6000);
+      }
     }
     supabaseClient.auth.onAuthStateChange((event, session) => {
       const nextUser = session?.user || null;
@@ -1000,7 +1032,8 @@
         render();
         $('#header-profile-name').textContent = 'Your profile';
         $('#header-profile-avatar').textContent = 'Q';
-        showLanding();
+        if (keepVerifiedSignIn) showVerifiedSignIn();
+        else showLanding();
       } else if (nextUser.id !== previousId) {
         showSignedIn();
         window.setTimeout(async () => {

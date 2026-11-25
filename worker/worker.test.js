@@ -99,8 +99,9 @@ test('admin quote status control is owner-protected and records audited updates'
 });
 
 test('sidebar promotes the AI assistant without the redundant growth slogan card',async()=>{
- const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');
- assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.match(html,/class="topbar-ask support-launch"/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/class="sidebar-bottom"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.pro-rail\{grid-column:2/);
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.match(html,/class="sidebar-bottom"/);assert.match(html,/class="help-card support-launch"/);assert.doesNotMatch(html,/class="topbar-ask/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.pro-rail\{grid-column:2/);assert.match(css,/minmax\(0,1fr\) 420px/);assert.match(css,/min-height:calc\(100vh - 108px\)/);
+ assert.match(app,/Email verified\. Sign in to open your desk\./);assert.match(app,/verifyOtp\(\{ token_hash: callback\.tokenHash, type: callback\.type \}\)/);
 });
 
 test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',async()=>{
@@ -660,4 +661,52 @@ test('wrangler defines daily production cron and prevents staging cron jobs',asy
  assert.match(growth,/create table if not exists public\.quote_bookings/);assert.match(growth,/create table if not exists public\.recurring_service_plans/);assert.match(growth,/create table if not exists public\.customer_notes/);assert.match(growth,/request_quote_booking/);
  assert.match(config,/binding = "SITE_ANALYTICS"/);assert.match(config,/dataset = "site_analytics"/);assert.match(config,/crons\s*=\s*\["0 9 \* \* \*"\]/);
  assert.match(config,/DISABLE_SCHEDULED_JOBS\s*=\s*"true"/);
+});
+
+test('a used confirmation link is treated as a verified email instead of an error', async () => {
+ const { readFileSync } = await import('node:fs');
+ const vm = await import('node:vm');
+ const context = { URL, URLSearchParams };
+ vm.createContext(context);
+ vm.runInContext(readFileSync(new URL('../public/auth-callback.js', import.meta.url), 'utf8'), context);
+ const auth = context.EliteQuoteFlowAuth;
+ const used = auth.read('https://elitequoteflow.com/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+ assert.equal(used.consumed, true);
+ assert.equal(auth.cleanError('https://elitequoteflow.com/#error=access_denied&error_code=otp_expired&type=signup'), '/#type=signup');
+ const fresh = auth.read('https://elitequoteflow.com/?token_hash=abc123XYZ_-token&type=signup');
+ assert.equal(fresh.consumed, false);
+ assert.equal(fresh.type, 'signup');
+ assert.equal(fresh.tokenHash, 'abc123XYZ_-token');
+ assert.equal(auth.consumedText('both auth code and code verifier should be non-empty'), true);
+ assert.equal(auth.consumedText('Failed to fetch'), false);
+});
+
+test('signup and Google confirmation mail names Elite Quote Flow and stays on this site', async () => {
+ const { authMessage } = await import('./auth-email.js');
+ const message = authMessage(
+  { RESEND_FROM_EMAIL: 'quotes@admin.elitequoteflow.com', PUBLIC_APP_URL: 'https://elitequoteflow.com' },
+  new Request('https://elitequoteflow.com/api/auth-email'),
+  { user: { email: 'Owner@Example.com' }, email_data: { email_action_type: 'signup', token_hash: 'hashed-token_value' } }
+ );
+ assert.equal(message.from, 'Elite Quote Flow <welcome@elitequoteflow.com>');
+ assert.equal(message.subject, 'Confirm your Elite Quote Flow account');
+ assert.match(message.text, /https:\/\/elitequoteflow\.com\/\?token_hash=hashed-token_value&type=signup/);
+ assert.doesNotMatch(message.text, /supabase\.co/);
+ const secret = Buffer.from('hook-secret-value').toString('base64');
+ const body = JSON.stringify({ user: { email: 'owner@example.com' }, email_data: { email_action_type: 'magiclink', token_hash: 'hashed-token_value' } });
+ const id = 'msg_123';
+ const timestamp = String(Math.floor(Date.now() / 1000));
+ const key = await crypto.subtle.importKey('raw', Buffer.from(secret, 'base64'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+ const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${id}.${timestamp}.${body}`));
+ const signature = `v1,${Buffer.from(mac).toString('base64')}`;
+ let sent;
+ await withMockedFetch(async (_url, options) => { sent = JSON.parse(options.body); return Response.json({ id: 'email_1' }); }, async () => {
+  const denied = await worker.fetch(new Request('https://elitequoteflow.com/api/auth-email', { method: 'POST', body }), { ...baseEnv, RESEND_API_KEY: 'resend', RESEND_FROM_EMAIL: 'quotes@admin.elitequoteflow.com', PUBLIC_APP_URL: 'https://elitequoteflow.com', SEND_EMAIL_HOOK_SECRET: secret });
+  assert.equal(denied.status, 401);
+  const accepted = await worker.fetch(new Request('https://elitequoteflow.com/api/auth-email', { method: 'POST', body, headers: { 'webhook-id': id, 'webhook-timestamp': timestamp, 'webhook-signature': signature } }), { ...baseEnv, RESEND_API_KEY: 'resend', RESEND_FROM_EMAIL: 'quotes@admin.elitequoteflow.com', PUBLIC_APP_URL: 'https://elitequoteflow.com', SEND_EMAIL_HOOK_SECRET: `v1,whsec_${secret}` });
+  assert.equal(accepted.status, 200);
+ });
+ assert.equal(sent.from, 'Elite Quote Flow <welcome@elitequoteflow.com>');
+ assert.equal(sent.subject, 'Sign in to Elite Quote Flow');
+ assert.doesNotMatch(sent.text, /supabase\.co/);
 });
