@@ -1037,7 +1037,7 @@
     ].map(([value, label]) => `<option value="${value}" ${quote.status === value ? 'selected' : ''}>${label}</option>`).join('');
     const contact = [quote.email, quote.phone].filter(Boolean).map(escapeHTML).join(' · ');
     const referral = quote.referralSource ? `<span class="customer-referral" title="Referral source">From ${escapeHTML(quote.referralSource)}</span>` : '';
-    const actions = `<div class="row-actions">${quote.status === 'sent' ? `<button class="row-email" type="button" aria-label="Draft follow-up email to ${escapeHTML(quote.customer)}" title="Draft follow-up email" ${quote.email ? '' : 'disabled'}>✉</button>${quote.phone ? `<a class="row-call" href="tel:${escapeHTML(quote.phone.replace(/[^\d+]/g, ''))}" aria-label="Call ${escapeHTML(quote.customer)}" title="Call customer">☎</a>` : ''}` : ''}<button class="row-share-quote" type="button" aria-label="Copy customer quote link for ${escapeHTML(quote.customer)}" title="Copy customer quote link">🔗</button><button class="row-send-quote" type="button" aria-label="Draft quote email to ${escapeHTML(quote.customer)}" title="Draft quote email" ${quote.email ? '' : 'disabled'}>➤</button><button class="row-print-quote" type="button" aria-label="Print proposal for ${escapeHTML(quote.customer)}" title="Print or save as PDF">▤</button><button class="row-edit" type="button" aria-label="Edit quote for ${escapeHTML(quote.customer)}" title="Edit quote">✎</button><button class="row-delete" type="button" aria-label="Delete quote for ${escapeHTML(quote.customer)}" title="Delete quote">×</button></div>`;
+    const actions = `<div class="row-actions">${quote.status === 'sent' ? `<button class="row-email" type="button" aria-label="Send follow-up email to ${escapeHTML(quote.customer)}" title="Send follow-up email" ${quote.email ? '' : 'disabled'}>✉</button>${quote.phone ? `<a class="row-call" href="tel:${escapeHTML(quote.phone.replace(/[^\d+]/g, ''))}" aria-label="Call ${escapeHTML(quote.customer)}" title="Call customer">☎</a>` : ''}` : ''}<button class="row-share-quote" type="button" aria-label="Copy customer quote link for ${escapeHTML(quote.customer)}" title="Copy customer quote link">🔗</button><button class="row-send-quote" type="button" aria-label="Draft quote email to ${escapeHTML(quote.customer)}" title="Draft quote email" ${quote.email ? '' : 'disabled'}>➤</button><button class="row-print-quote" type="button" aria-label="Print proposal for ${escapeHTML(quote.customer)}" title="Print or save as PDF">▤</button><button class="row-edit" type="button" aria-label="Edit quote for ${escapeHTML(quote.customer)}" title="Edit quote">✎</button><button class="row-delete" type="button" aria-label="Delete quote for ${escapeHTML(quote.customer)}" title="Delete quote">×</button></div>`;
     return `<tr data-id="${escapeHTML(quote.id)}">
       <td><div class="customer-cell"><span class="customer-avatar">${escapeHTML(initials(quote.customer))}</span><span><button type="button" class="customer-name customer-history-open" data-customer-history="${escapeHTML(quote.email?.toLowerCase() || quote.customer.toLowerCase())}" aria-label="View history for ${escapeHTML(quote.customer)}">${escapeHTML(quote.customer)}</button>${contact ? `<span class="customer-contact">${contact}</span>` : ''}${referral}${quote.note ? `<span class="customer-note" title="${escapeHTML(quote.note)}">${escapeHTML(quote.note)}</span>` : ''}</span></div></td>
       <td class="service-cell">${escapeHTML(quote.service)}${quote.lineItems?.length ? `<span class="customer-contact">${quote.lineItems.length} item${quote.lineItems.length === 1 ? '' : 's'}${quote.viewCount ? ` · ${quote.viewCount} view${quote.viewCount === 1 ? '' : 's'}` : ''}</span>` : quote.viewCount ? `<span class="customer-contact">${quote.viewCount} view${quote.viewCount === 1 ? '' : 's'}</span>` : ''}</td>
@@ -1180,6 +1180,7 @@
     form.reset();
     form.elements.currency.value = quote?.currency || importPreset?.currency || calculatorCurrency || 'USD';
     renderLineItemFields(quote?.lineItems || []);
+    clearUnusedAiDraft();
     form.querySelectorAll('.form-field').forEach(field => field.classList.remove('has-error'));
     form.querySelectorAll('.field-error').forEach(error => { error.textContent = ''; });
     const importing = Boolean(importPreset) && !quote;
@@ -1230,7 +1231,15 @@
     setTimeout(() => form.elements.customer.focus(), 30);
   }
 
+  function clearUnusedAiDraft() {
+    const preview = $('#ai-scope-preview');
+    const text = $('#ai-scope-preview-text');
+    if (text) text.textContent = '';
+    if (preview) preview.hidden = true;
+  }
+
   function closeDialog() {
+    clearUnusedAiDraft();
     if (typeof dialog.close === 'function') dialog.close();
     else dialog.removeAttribute('open');
   }
@@ -1829,6 +1838,26 @@
     }
   });
 
+  async function sendCustomerEmail(quote, subject, body, successLabel) {
+    const mailto = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (!isPro()) {
+      window.location.href = mailto;
+      return;
+    }
+    try {
+      const headers = await authHeaders();
+      const response = await fetch('/api/send-quote-email', { method: 'POST', headers, body: JSON.stringify({ quoteId: quote.id, subject, body }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not send the email.');
+      showToast(result.from ? `${successLabel} as ${result.from}.` : `${successLabel}.`);
+    } catch (error) {
+      showToast(error.message || 'Could not send the email.', 9000, {
+        error: true,
+        action: { label: 'Open email app', onClick: () => { window.location.href = mailto; } }
+      });
+    }
+  }
+
   rows.addEventListener('click', async event => {
     const row = event.target.closest('tr');
     if (!row) return;
@@ -1856,31 +1885,19 @@
       const subject = `Your ${quote.service} quote from ${profile.businessName || 'our team'}`;
       const followUpDate = shortDate(quote.followUp);
       const body = `Hi ${quote.customer},\n\nThank you for the opportunity to provide a quote for ${quote.service}.\n\nQuote total: ${formatMoney(quote.amount, quote.currency)}\n\nReview and respond to your quote: ${quoteLink}\n\nPlease let me know if you have any questions. I’ll plan to follow up on ${followUpDate}.\n\nBest,\n${profile.fullName || ''}${profile.businessName ? `\n${profile.businessName}` : ''}${profile.phone ? `\n${profile.phone}` : ''}`;
-      if (isPro()) {
-        try {
-          const headers = await authHeaders();
-          const response = await fetch('/api/send-quote-email', { method: 'POST', headers, body: JSON.stringify({ quoteId: quote.id, subject, body }) });
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || 'Could not send quote email.');
-          showToast(result.from ? `Quote email sent as ${result.from}.` : 'Quote email sent from your business name.');
-          return;
-        } catch (error) {
-          const mailto = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-          showToast(error.message || 'Could not send the quote email.', 9000, {
-            error: true,
-            action: { label: 'Open email app', onClick: () => { window.location.href = mailto; } }
-          });
-          return;
-        }
-      }
-      window.location.href = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      await sendCustomerEmail(quote, subject, body, 'Quote email sent');
       return;
     }
     if (event.target.closest('.row-email')) {
-      if (!quote.email) return showToast('Add the customer email to draft a follow-up.');
+      if (!quote.email) return showToast('Add the customer email before sending a follow-up.');
+      if (!quote.publicToken) {
+        try { await makeQuoteShareable(quote); }
+        catch (error) { return showToast(`Could not create quote link: ${error.message}`); }
+      }
+      const quoteLink = `${window.location.origin}/q/${quote.publicToken}`;
       const subject = `Following up on your ${quote.service} quote`;
-      const body = `Hi ${quote.customer},\n\nI wanted to follow up on the quote for ${quote.service} (${formatMoney(quote.amount, quote.currency)}). Do you have any questions, or is there anything else I can help with?\n\nLet me know what works best for you.\n\nBest,\n`;
-      window.location.href = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const body = `Hi ${quote.customer},\n\nI wanted to follow up on the quote for ${quote.service} (${formatMoney(quote.amount, quote.currency)}).\n\nReview your quote: ${quoteLink}\n\nDo you have any questions, or is there anything else I can help with?\n\nBest,\n${profile.fullName || ''}${profile.businessName ? `\n${profile.businessName}` : ''}`;
+      await sendCustomerEmail(quote, subject, body, 'Follow-up sent');
       return;
     }
     const button = event.target.closest('.row-delete');
@@ -2225,7 +2242,6 @@
   $('#draft-quote-scope').addEventListener('click', async event => {
     if (!requirePro('AI scope drafting')) return;
     const button = event.currentTarget;
-    const terms = $('#quote-terms');
     const data = new FormData(form);
     const notes = [
       `Customer/job: ${String(data.get('customer') || '').trim()}`,
@@ -2234,6 +2250,7 @@
       `Existing scope and terms: ${String(data.get('terms') || '').trim()}`
     ].filter(line => !line.endsWith(': ')).join('\n');
     if (!String(data.get('service') || '').trim() && !String(data.get('lineDescription') || '').trim()) return showToast('Add a service or line item before asking AI to draft a scope.');
+    const draftLabel = button.innerHTML;
     button.disabled = true;
     button.textContent = 'Drafting…';
     try {
@@ -2241,10 +2258,25 @@
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not draft the scope.');
       if (result.mode !== 'ai') throw new Error(result.reply || 'AI drafting is temporarily unavailable.');
-      terms.value = result.reply.slice(0, 2000);
-      terms.dispatchEvent(new Event('input', { bubbles: true }));
+      $('#ai-scope-preview-text').textContent = result.reply.slice(0, 2000);
+      $('#ai-scope-preview').hidden = false;
+      $('#ai-scope-preview').scrollIntoView({ block: 'nearest' });
+      showToast('Review the AI draft. It stays out of the quote until you use it.');
     } catch (error) { showToast(error.message, 6000); }
-    finally { button.disabled = false; button.textContent = 'Draft scope with AI'; }
+    finally { button.disabled = false; button.innerHTML = draftLabel; }
+  });
+  $('#ai-scope-use').addEventListener('click', () => {
+    const draft = $('#ai-scope-preview-text').textContent.trim();
+    if (!draft) return clearUnusedAiDraft();
+    const terms = $('#quote-terms');
+    terms.value = draft;
+    terms.dispatchEvent(new Event('input', { bubbles: true }));
+    clearUnusedAiDraft();
+    showToast('AI draft added to the scope. Edit it before you save.');
+  });
+  $('#ai-scope-discard').addEventListener('click', () => {
+    clearUnusedAiDraft();
+    showToast('AI draft discarded. It will not be included when you send the quote.');
   });
   $('#register-signin').addEventListener('click', () => showSignedOut('signin'));
   $('#auth-mode-toggle').addEventListener('click', showRegistration);
