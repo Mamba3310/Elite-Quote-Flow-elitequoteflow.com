@@ -38,8 +38,13 @@
     const split = totals.length > 1;
     element.classList.toggle('is-split', split);
     element.replaceChildren();
+    if (!totals.length) {
+      const code = CURRENCIES.includes(calculatorCurrency) ? calculatorCurrency : 'USD';
+      element.textContent = formatMoney(0, code);
+      return;
+    }
     if (!split) {
-      element.textContent = totals.length ? formatMoney(totals[0][1], totals[0][0]) : formatMoney(0);
+      element.textContent = formatMoney(totals[0][1], totals[0][0]);
       return;
     }
     totals
@@ -1197,7 +1202,10 @@
     $('#metric-due').textContent = String(dueQuotes.length);
     $('#due-caption').textContent = dueQuotes.length ? `${dueQuotes.filter(quote => daysUntil(quote.followUp) < 0).length} overdue · ${dueQuotes.filter(quote => daysUntil(quote.followUp) === 0).length} due today` : 'No follow-ups due today';
     renderAcceptedTotal($('#metric-won'), wonThisMonth);
-    $('#won-caption').textContent = `${wonThisMonth.length} accepted quote${wonThisMonth.length === 1 ? '' : 's'}`;
+    const wonCurrencies = currencyTotals(wonThisMonth);
+    $('#won-caption').textContent = wonCurrencies.length > 1
+      ? `${wonThisMonth.length} accepted quotes · ${wonCurrencies.length} currencies kept separate`
+      : `${wonThisMonth.length} accepted quote${wonThisMonth.length === 1 ? '' : 's'}`;
     const recoveredQuotes = quotes.filter(isRecoveredByFollowUp);
     const recoveredEl = $('#metric-recovered');
     const recoveredCaption = $('#recovered-caption');
