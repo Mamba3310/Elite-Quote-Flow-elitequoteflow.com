@@ -3044,14 +3044,14 @@
   }
   function offerHelpNudge() {
     if (!helpNudge || sessionStorage.getItem('eqf-help-nudge') || document.querySelector('dialog[open]')) {
-      if (helpNudge && !sessionStorage.getItem('eqf-help-nudge') && document.querySelector('dialog[open]')) window.setTimeout(offerHelpNudge, 20000);
+      if (helpNudge && !sessionStorage.getItem('eqf-help-nudge') && document.querySelector('dialog[open]')) window.setTimeout(offerHelpNudge, 30000);
       return;
     }
     helpNudge.hidden = false;
     sessionStorage.setItem('eqf-help-nudge', '1');
     playHelpChime();
   }
-  window.setTimeout(offerHelpNudge, 40000 + Math.floor(Math.random() * 35000));
+  window.setTimeout(offerHelpNudge, 30000);
   $('#help-nudge-dismiss')?.addEventListener('click', () => { helpNudge.hidden = true; });
   $('#help-nudge-open')?.addEventListener('click', () => { helpNudge.hidden = true; supportDialog.showModal(); });
   $('#support-close').addEventListener('click', () => supportDialog.close());
