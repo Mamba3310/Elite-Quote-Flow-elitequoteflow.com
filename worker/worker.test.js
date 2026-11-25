@@ -541,7 +541,31 @@ test('Pro customer messages send from the company mailbox and reject free accoun
  });
  assert.equal(sent.length,1);assert.equal(sent[0].to[0],'casey@example.com');assert.equal(sent[0].reply_to,'owner@example.com');assert.equal(sent[0].from,'Acme Painting <acme-painting@elitequoteflow.com>');
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
- assert.match(html,/id="message-composer"/);assert.match(html,/data-feature-action="message"/);assert.match(app,/api\/send-customer-message/);assert.match(app,/sms:\$\{phone\}/);
+ assert.match(html,/id="message-composer"/);assert.match(html,/data-feature-action="message"/);assert.match(html,/name="bulk"/);assert.match(app,/api\/send-customer-message/);assert.match(app,/BULK_MESSAGE_LIMIT = 25/);assert.match(app,/sms:\$\{phone\}/);
+});
+
+test('Pro bulk messages send one email per customer and stop at 25',async()=>{
+ const sent=[];
+ let calls=0;
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,business_name:'Acme Painting',full_name:'Alex Owner'}]);
+  if(target==='https://api.resend.com/emails'){
+   calls+=1;const body=JSON.parse(options.body);sent.push(body);
+   if(body.to[0]==='ada@example.com')return Response.json({message:'Mailbox unavailable.'},{status:422});
+   return Response.json({id:`msg_${calls}`});
+  }
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const bulk=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{recipients:[{to:'Casey@Example.com',name:'Casey'},{to:'casey@example.com',name:'Duplicate'},{to:'ada@example.com',name:'Ada'}],subject:'Hello',body:'Hi {{customer}}, the yard is ready.'},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com'});
+  const body=await bulk.json();
+  assert.equal(bulk.status,200);assert.equal(body.count,1);assert.equal(body.failed,1);assert.equal(body.from,'Acme Painting <acme-painting@elitequoteflow.com>');
+  const tooMany=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{recipients:Array.from({length:26},(_,index)=>({to:`c${index}@example.com`,name:'Customer'})),subject:'Hello',body:'Checking in on the yard.'},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(tooMany.status,400);
+  assert.match((await tooMany.json()).error,/25 customers/);
+ });
+ assert.equal(sent.length,2);assert.equal(sent[0].text,'Hi Casey, the yard is ready.');assert.equal(sent[1].to[0],'ada@example.com');
 });
 
 test('business sender addresses use the business name and avoid platform mailboxes',async()=>{

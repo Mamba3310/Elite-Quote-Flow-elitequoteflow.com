@@ -91,7 +91,13 @@
     ['Enable reminders', 'Activer les rappels', 'Activar recordatorios', 'Ativar lembretes', '开启提醒', 'Tan ìránilétí'],
     ['Add quote', 'Ajouter un devis', 'Añadir presupuesto', 'Adicionar orçamento', '添加报价', 'Fi ìdíyelé kún'],
     ['Import local quotes', 'Importer les devis locaux', 'Importar presupuestos locales', 'Importar orçamentos locais', '导入本地报价', 'Gbé àwọn ìdíyelé ìbílẹ̀ wọlé'],
-    ['QUOTE DESK', 'BUREAU DES DEVIS', 'MESA DE PRESUPUESTOS', 'MESA DE ORÇAMENTOS', '报价台', 'TÁBÌLÌ ÌDÍYELÉ']
+    ['QUOTE DESK', 'BUREAU DES DEVIS', 'MESA DE PRESUPUESTOS', 'MESA DE ORÇAMENTOS', '报价台', 'TÁBÌLÌ ÌDÍYELÉ'],
+    ['Send to several customers', 'Envoyer à plusieurs clients', 'Enviar a varios clientes', 'Enviar para vários clientes', '发送给多位客户', 'Fi ránṣẹ́ sí ọ̀pọ̀ oníbàárà'],
+    ['Select all', 'Tout sélectionner', 'Seleccionar todo', 'Selecionar tudo', '全选', 'Yan gbogbo'],
+    ['One send can include 25 customers. Use {{customer}} where the name should appear.', 'Un envoi peut inclure 25 clients. Utilisez {{customer}} là où le nom doit apparaître.', 'Un envío puede incluir 25 clientes. Use {{customer}} donde deba aparecer el nombre.', 'Um envio pode incluir 25 clientes. Use {{customer}} onde o nome deve aparecer.', '一次最多发送给 25 位客户。在需要显示姓名的地方使用 {{customer}}。', 'Ìfiránṣẹ́ kan lè dé ọ̀dọ̀ oníbàárà 25. Lo {{customer}} níbi tí orúkọ yóò hàn.'],
+    ['Add an email on a quote before sending to several customers.', 'Ajoutez un e-mail sur un devis avant d’envoyer à plusieurs clients.', 'Añada un correo en un presupuesto antes de enviar a varios clientes.', 'Adicione um e-mail em um orçamento antes de enviar para vários clientes.', '先在报价上添加邮箱，再发送给多位客户。', 'Fi ímeèlì kún ìdíyelé kí o tó fi ránṣẹ́ sí ọ̀pọ̀ oníbàárà.'],
+    ['Choose at least one customer.', 'Choisissez au moins un client.', 'Elija al menos un cliente.', 'Escolha pelo menos um cliente.', '至少选择一位客户。', 'Yan oníbàárà kan ó kéré jù.'],
+    ['Choose up to 25 customers in one send.', 'Choisissez jusqu’à 25 clients par envoi.', 'Elija hasta 25 clientes en un envío.', 'Escolha até 25 clientes em um envio.', '一次最多选择 25 位客户。', 'Yan oníbàárà tí kò ju 25 lọ ní ìfiránṣẹ́ kan.']
   ];
   const phrases = { fr: {}, es: {}, pt: {}, zh: {}, yo: {} };
   const codes = ['fr', 'es', 'pt', 'zh', 'yo'];

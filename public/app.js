@@ -269,14 +269,51 @@
     $('#branded-email-dialog').showModal();
   }
 
+  const BULK_MESSAGE_LIMIT = 25;
   let messageDraft = null;
+  function customerRecipients() {
+    const people = new Map();
+    for (const quote of quotes) {
+      const email = String(quote.email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || people.has(email)) continue;
+      people.set(email, { email, name: String(quote.customer || '').trim() });
+    }
+    return [...people.values()];
+  }
+  function renderBulkList() {
+    const list = $('#message-bulk-list');
+    if (!list) return;
+    const people = customerRecipients();
+    if (!people.length) {
+      list.innerHTML = '<p class="message-bulk-empty">Add an email on a quote before sending to several customers.</p>';
+      return;
+    }
+    const options = people.map(person => `<label><input type="checkbox" name="recipient" value="${escapeHTML(person.email)}" data-name="${escapeHTML(person.name)}"><span>${escapeHTML(person.name || person.email)}</span><small>${escapeHTML(person.email)}</small></label>`).join('');
+    list.innerHTML = `<label class="message-bulk-all"><input type="checkbox" id="message-bulk-all"><span>Select all</span></label>${options}`;
+  }
+  function selectedRecipients() {
+    return [...($('#message-form')?.querySelectorAll('[name="recipient"]:checked') || [])].map(input => ({ to: input.value, name: input.dataset.name || '' }));
+  }
   function syncMessageChannel() {
-    const text = $('#message-form')?.elements.channel.value === 'text';
-    $('#message-email-field').hidden = text;
+    const form = $('#message-form');
+    const text = form?.elements.channel.value === 'text';
+    const bulk = !text && Boolean(form?.elements.bulk?.checked);
+    $('#message-email-field').hidden = text || bulk;
     $('#message-subject-field').hidden = text;
     $('#message-phone-field').hidden = !text;
-    $('#message-send').textContent = text ? 'Open text' : 'Send email';
-    $('#message-footnote').textContent = text ? 'The text opens in your phone with the message you wrote.' : 'Email is sent from your company address. Replies come back to your account.';
+    const bulkField = $('#message-bulk-field');
+    if (bulkField) bulkField.hidden = text;
+    const bulkList = $('#message-bulk-list');
+    if (bulkList) bulkList.hidden = !bulk;
+    const bulkNote = $('#message-bulk-note');
+    if (bulkNote) bulkNote.hidden = !bulk;
+    const count = selectedRecipients().length;
+    $('#message-send').textContent = text ? 'Open text' : bulk && count ? `Send to ${count}` : 'Send email';
+    $('#message-footnote').textContent = text
+      ? 'The text opens in your phone with the message you wrote.'
+      : bulk
+        ? 'One send can include 25 customers. Use {{customer}} where the name should appear.'
+        : 'Email is sent from your company address. Replies come back to your account.';
   }
   function openMessageComposer(draft = {}) {
     if (!requirePro('Customer messages')) return;
@@ -284,12 +321,14 @@
     const mailbox = brandedMailbox();
     const form = $('#message-form');
     form.elements.channel.value = draft.channel || 'email';
+    if (form.elements.bulk) form.elements.bulk.checked = false;
     form.elements.email.value = draft.email || '';
     form.elements.phone.value = draft.phone || '';
     form.elements.subject.value = draft.subject || (draft.customer ? `Message for ${draft.customer}` : '');
     form.elements.body.value = draft.body || (draft.customer ? `Hi ${draft.customer},\n\n` : '');
     $('#message-from').textContent = `From ${mailbox.name} <${mailbox.address}>`;
     $('#message-error').textContent = '';
+    renderBulkList();
     syncMessageChannel();
     if (typeof $('#message-composer').showModal === 'function') $('#message-composer').showModal();
     else $('#message-composer').setAttribute('open', '');
@@ -2654,6 +2693,28 @@
   $('#auth-mode-toggle').addEventListener('click', showRegistration);
   $('#header-profile-button').addEventListener('click', openProfileDialog);
   $('#message-form')?.querySelectorAll('[name="channel"]').forEach(input => input.addEventListener('change', syncMessageChannel));
+  $('#message-form')?.elements.bulk?.addEventListener('change', () => {
+    if ($('#message-form').elements.bulk.checked) renderBulkList();
+    syncMessageChannel();
+  });
+  $('#message-bulk-list')?.addEventListener('change', event => {
+    const input = event.target;
+    const boxes = [...$('#message-bulk-list').querySelectorAll('[name="recipient"]')];
+    const limitError = $('#message-error');
+    const showLimit = message => { limitError.dataset.bulkLimit = '1'; limitError.textContent = message; };
+    const clearLimit = () => { if (!limitError.dataset.bulkLimit) return; limitError.dataset.bulkLimit = ''; limitError.textContent = ''; };
+    if (input.id === 'message-bulk-all') {
+      boxes.forEach((box, index) => { box.checked = input.checked && index < BULK_MESSAGE_LIMIT; });
+      if (input.checked && boxes.length > BULK_MESSAGE_LIMIT) showLimit('Choose up to 25 customers in one send.');
+      else clearLimit();
+    } else if (input.name === 'recipient' && selectedRecipients().length > BULK_MESSAGE_LIMIT) {
+      input.checked = false;
+      showLimit('Choose up to 25 customers in one send.');
+    } else clearLimit();
+    const all = $('#message-bulk-all');
+    if (all) all.checked = boxes.length > 0 && boxes.every((box, index) => index >= BULK_MESSAGE_LIMIT || box.checked);
+    syncMessageChannel();
+  });
   $('#message-close')?.addEventListener('click', () => $('#message-composer')?.close());
   $('#message-cancel')?.addEventListener('click', () => $('#message-composer')?.close());
   $('#message-composer')?.addEventListener('click', event => { if (event.target === $('#message-composer')) $('#message-composer').close(); });
@@ -2676,6 +2737,27 @@
     }
     const email = messageForm.elements.email.value.trim();
     const subject = messageForm.elements.subject.value.trim();
+    if (messageForm.elements.bulk?.checked) {
+      const recipients = selectedRecipients().slice(0, BULK_MESSAGE_LIMIT);
+      if (!recipients.length) { error.textContent = 'Choose at least one customer.'; return; }
+      if (!subject) { error.textContent = 'Enter a subject.'; return; }
+      const button = $('#message-send');
+      button.disabled = true;
+      try {
+        const headers = await authHeaders();
+        const response = await fetch('/api/send-customer-message', { method: 'POST', headers, body: JSON.stringify({ recipients, subject, body }) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not send the message.');
+        const failed = Number(result.failed) || 0;
+        showToast(failed ? `Sent ${result.count} messages. ${failed} could not be sent.` : `Sent ${result.count} messages as ${result.from}.`);
+        $('#message-composer').close();
+      } catch (sendError) {
+        error.textContent = sendError.message || 'Could not send the message.';
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
     if (!messageForm.elements.email.checkValidity() || !email) { error.textContent = 'Enter the customer email.'; return; }
     if (!subject) { error.textContent = 'Enter a subject.'; return; }
     const button = $('#message-send');
