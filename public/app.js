@@ -498,11 +498,59 @@
     }
   }
 
+  function showCompanyLogo(url) {
+    const preview = $('#company-logo-preview');
+    const remove = $('#company-logo-remove');
+    profileForm.elements.companyLogoUrl.value = url || '';
+    if (!preview || !remove) return;
+    if (url) {
+      preview.src = url;
+      preview.hidden = false;
+      remove.hidden = false;
+    } else {
+      preview.removeAttribute('src');
+      preview.hidden = true;
+      remove.hidden = true;
+    }
+  }
+
+  function readLogoFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve('');
+      if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return reject(new Error('Upload a PNG, JPG, WebP, or GIF logo.'));
+      if (file.size > 5 * 1024 * 1024) return reject(new Error('That logo is larger than 5 MB. Choose a smaller image.'));
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read that logo.'));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(new Error('Could not open that logo.'));
+        image.onload = () => {
+          const scale = Math.min(1, 360 / image.width, 160 / image.height);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+          const keepPng = /png|webp|gif/.test(file.type);
+          let url = canvas.toDataURL(keepPng ? 'image/png' : 'image/jpeg', 0.82);
+          if (url.length > 120000) url = canvas.toDataURL('image/jpeg', 0.72);
+          if (url.length > 120000) return reject(new Error('That logo is still too large after resizing. Try a simpler image.'));
+          resolve(url);
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  let logoUpload = Promise.resolve();
+
   function openProfileDialog() {
     profileForm.elements.fullName.value = formatDisplayName(profile.fullName || currentUser?.user_metadata?.full_name || '');
     profileForm.elements.businessName.value = profile.businessName || currentUser?.user_metadata?.business_name || '';
     profileForm.elements.phone.value = profile.phone || currentUser?.user_metadata?.phone || '';
-    profileForm.elements.companyLogoUrl.value = profile.companyLogoUrl || '';
+    showCompanyLogo(profile.companyLogoUrl || '');
+    const logoFile = $('#company-logo-file');
+    if (logoFile) logoFile.value = '';
     profileForm.elements.brandColor.value = profile.brandColor || '#426DDE';
     profileForm.elements.companyAddress.value = profile.companyAddress || '';
     if (profileForm.elements.taxId) profileForm.elements.taxId.value = profile.taxId || '';
@@ -528,7 +576,7 @@
         full_name: values.fullName,
         business_name: values.businessName,
         phone: values.phone,
-        company_logo_url: values.companyLogoUrl,
+        company_logo_url: values.companyLogoUrl.startsWith('data:') ? '' : values.companyLogoUrl,
         brand_color: values.brandColor,
         company_address: values.companyAddress,
         tax_id: values.taxId
@@ -2574,6 +2622,25 @@
   $('#branded-email-close')?.addEventListener('click', () => $('#branded-email-dialog')?.close());
   $('#branded-email-dialog')?.addEventListener('click', event => { if (event.target === $('#branded-email-dialog')) $('#branded-email-dialog').close(); });
   $('#branded-email-profile')?.addEventListener('click', () => { $('#branded-email-dialog')?.close(); openProfileDialog(); });
+  $('#company-logo-file')?.addEventListener('change', () => {
+    const file = $('#company-logo-file').files?.[0];
+    const field = $('#company-logo-field');
+    const fieldError = field?.querySelector('.field-error');
+    if (fieldError) fieldError.textContent = '';
+    if (!file) return;
+    logoUpload = readLogoFile(file).then(url => {
+      showCompanyLogo(url);
+      $('#company-logo-file').value = '';
+    }).catch(error => {
+      if (fieldError) fieldError.textContent = error.message || 'Could not use that logo.';
+      $('#company-logo-file').value = '';
+    });
+  });
+  $('#company-logo-remove')?.addEventListener('click', () => {
+    showCompanyLogo('');
+    const file = $('#company-logo-file');
+    if (file) file.value = '';
+  });
   document.querySelectorAll('.profile-close').forEach(button => button.addEventListener('click', () => profileDialog.close()));
   profileDialog.addEventListener('click', event => { if (event.target === profileDialog) profileDialog.close(); });
   $('#save-profile-button').addEventListener('click', async () => {
@@ -2607,6 +2674,7 @@
     button.disabled = true;
     button.textContent = 'Saving…';
     try {
+      await logoUpload;
       const resultMessage = await saveProfile({ fullName, businessName: profileForm.elements.businessName.value.trim(), phone: profileForm.elements.phone.value.trim(), companyLogoUrl: profileForm.elements.companyLogoUrl.value.trim(), brandColor: profileForm.elements.brandColor.value, companyAddress: profileForm.elements.companyAddress.value.trim(), taxId: profileForm.elements.taxId.value.trim(), email });
       saveError.textContent = resultMessage;
       saveError.hidden = false;
