@@ -119,6 +119,13 @@ test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',
  assert.match(html,/id="takeout-bar"/);assert.match(html,/id="branded-email-dialog"/);assert.match(html,/rel="icon" href="\/favicon.svg"/);assert.match(app,/function showBrandedEmail/);assert.match(app,/action === 'branded-email'/);assert.match(css,/\.sidebar\{position:fixed[^}]*width:300px/);
 });
 
+test('language switch sits beside cloud sync and includes Yoruba and Chinese',async()=>{
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const i18n=await readFile(new URL('../public/i18n.js',import.meta.url),'utf8');
+ const top=html.slice(html.indexOf('class="topbar"'), html.indexOf('class="page-content"'));
+ assert.ok(top.indexOf('class="cloud-sync"')>=0 && top.indexOf('class="cloud-sync"')<top.indexOf('class="language-switch"') && top.indexOf('class="language-switch"')<top.indexOf('id="header-profile-button"'));
+ assert.match(html,/src="i18n.js"/);assert.match(i18n,/Yorùbá/);assert.match(i18n,/中文/);assert.match(i18n,/Wọlé/);assert.match(i18n,/\['yo', 'Yorùbá'\]/);
+});
+
 test('calculator currency control offers supported currencies and updates results and estimate currency',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
  assert.match(html,/<select id="calc-currency" class="calculator-badge" aria-label="Calculator currency"><\/select>/);assert.match(html,/id="calc-currency-symbol-rate"/);assert.match(html,/id="calc-currency-symbol-materials"/);
@@ -132,7 +139,7 @@ test('Nigerian defaults, optional tax ID profile, and tax-aware invoice exports 
 
 test('Nigerian naira is available for quotes, templates, and calculator pricing',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
- assert.match(app,/\['USD', 'EUR', 'GBP', 'NGN'/);assert.match(app,/currencyOptions/);assert.match(app,/formatMoney\(price, calculatorCurrency\)/);assert.match(app,/Intl\.NumberFormat\(undefined, \{ style: 'currency', currency: code/);assert.match(html,/id="calc-currency"/);assert.match(html,/class="currency-select"/);
+ assert.match(app,/\['USD', 'EUR', 'GBP', 'NGN'/);assert.match(app,/currencyOptions/);assert.match(app,/formatMoney\(price, calculatorCurrency\)/);assert.match(app,/NGN: '₦'/);assert.match(app,/CNY: '¥'/);assert.match(app,/EUR: '€'/);assert.match(app,/BRL: 'R\$'/);assert.match(app,/INR: '₹'/);assert.match(app,/function currencySign/);assert.match(html,/id="calc-currency"/);assert.match(html,/class="currency-select"/);
 });
 
 test('owner analytics reports aggregate quote views and decisions by country',async()=>{

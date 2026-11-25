@@ -18,10 +18,21 @@
     $('#upgrade-strip')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return false;
   };
-  const currencyOptions = CURRENCIES.map(code => `<option value="${code}">${code}</option>`).join('');
+  const CURRENCY_SIGNS = { USD: '$', EUR: '€', GBP: '£', NGN: '₦', CAD: 'CA$', AUD: 'A$', NZD: 'NZ$', CHF: 'Fr', JPY: '¥', CNY: '¥', INR: '₹', MXN: 'MX$', BRL: 'R$', ZAR: 'R', SGD: 'S$', HKD: 'HK$', SEK: 'kr', NOK: 'kr', DKK: 'kr', PLN: 'zł' };
+  const currencyOptions = CURRENCIES.map(code => `<option value="${code}">${code} ${CURRENCY_SIGNS[code]}</option>`).join('');
+  function currencySign(code) {
+    const currency = CURRENCIES.includes(code) ? code : 'USD';
+    return CURRENCY_SIGNS[currency] || currency;
+  }
+  function currencyFractionDigits(code) {
+    const currency = CURRENCIES.includes(code) ? code : 'USD';
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).resolvedOptions().maximumFractionDigits;
+  }
   function formatMoney(amount, currency = 'USD') {
     const code = CURRENCIES.includes(currency) ? currency : 'USD';
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: code, maximumFractionDigits: 2 }).format(Number(amount) || 0);
+    const digits = currencyFractionDigits(code);
+    const number = new Intl.NumberFormat(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Number(amount) || 0);
+    return `${currencySign(code)}${number}`;
   }
   function quoteItemLabels(quote) {
     const labels = (quote.lineItems || []).map(item => String(item.description || '').trim()).filter(Boolean).slice(0, 8);
@@ -65,8 +76,7 @@
         const label = document.createElement('small');
         label.textContent = code;
         const figure = document.createElement('b');
-        const whole = Math.abs(amount - Math.round(amount)) < 0.001;
-        figure.textContent = new Intl.NumberFormat(undefined, { style: 'currency', currency: code, maximumFractionDigits: whole ? 0 : 2 }).format(amount);
+        figure.textContent = formatMoney(amount, code);
         line.append(label, figure);
         element.append(line);
       });
@@ -212,10 +222,12 @@
   }
   function updateGreeting() {
     const hour = new Date().getHours();
-    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const t = window.eqfTranslate || (value => value);
+    const greeting = hour < 12 ? t('Good morning') : hour < 17 ? t('Good afternoon') : t('Good evening');
     const name = greetingName();
     $('#greeting-text').textContent = name ? `${greeting}, ${name}` : greeting;
   }
+  window.eqfOnLanguage = updateGreeting;
   function updateDeskIntro(openQuotes, dueQuotes) {
     const subtitle = $('#welcome-subtitle');
     if (!subtitle) return;
@@ -1412,6 +1424,7 @@
     $('#count-won').textContent = String(quotes.filter(quote => quote.status === 'won').length);
     $('#count-lost').textContent = String(quotes.filter(quote => quote.status === 'lost').length);
     $('#table-summary').textContent = `Showing ${visible.length} of ${quotes.length} quote${quotes.length === 1 ? '' : 's'}`;
+    window.eqfApplyLanguage?.();
   }
 
   function hideToast() {
@@ -1611,7 +1624,7 @@
     calculatorCurrency = CURRENCIES.includes(currency) ? currency : 'USD';
     const select = $('#calc-currency');
     if (select) select.value = calculatorCurrency;
-    const symbol = new Intl.NumberFormat(undefined, { style: 'currency', currency: calculatorCurrency }).formatToParts(0).find(part => part.type === 'currency')?.value || calculatorCurrency;
+    const symbol = currencySign(calculatorCurrency);
     $('#calc-currency-symbol-rate').textContent = symbol;
     $('#calc-currency-symbol-materials').textContent = symbol;
     updateQuoteCalculator();
