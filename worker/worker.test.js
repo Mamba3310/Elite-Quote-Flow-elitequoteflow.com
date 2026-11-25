@@ -655,6 +655,30 @@ test('paid monthly Pro subscription activates renewable Pro access',async()=>{
  assert.equal(update.stripe_subscription_status,'active');
 });
 
+test('adaptive pricing lifetime checkout still grants Pro from the US dollar amount',async()=>{
+ const {lifetimeIntegrationCents}=await import('./stripe-webhook.js');
+ assert.equal(lifetimeIntegrationCents({currency:'usd',amount_total:14999,presentment_details:{presentment_amount:24000000,presentment_currency:'ngn'}}),14999);
+ assert.equal(lifetimeIntegrationCents({currency:'eur',amount_total:14000,currency_conversion:{source_currency:'usd',amount_total:14999}}),14999);
+ assert.equal(lifetimeIntegrationCents({currency:'eur',amount_total:14000}),null);
+ const timestamp=Math.floor(Date.now()/1000);
+ const body=JSON.stringify({id:'evt_lifetime_local',type:'checkout.session.completed',livemode:true,data:{object:{id:'cs_lifetime_local',mode:'payment',payment_status:'paid',client_reference_id:'user1',payment_link:'plink_lifetime',amount_total:14999,currency:'usd',customer:'cus_lifetime',presentment_details:{presentment_amount:24000000,presentment_currency:'ngn'}}}});
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(baseEnv.STRIPE_WEBHOOK_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const signatureBytes=await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${timestamp}.${body}`));
+ const signature=`t=${timestamp},v1=${[...new Uint8Array(signatureBytes)].map(byte=>byte.toString(16).padStart(2,'0')).join('')}`;
+ let update;
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.includes('/rest/v1/profiles?id=eq.user1&select=id'))return Response.json([{id:'user1'}]);
+  if(target.includes('/rest/v1/profiles?id=eq.user1')&&options.method==='PATCH'){update=JSON.parse(options.body);return new Response(null,{status:204});}
+  if(target.includes('/rest/v1/profiles?')&&!options.method)return Response.json([{id:'user1',referred_by_code:null,referral_reward_status:'none'}]);
+  assert.fail(`Unexpected upstream request ${target}`);
+ },async()=>{
+  const response=await worker.fetch(new Request('https://app.example/api/stripe-webhook',{method:'POST',body,headers:{'Stripe-Signature':signature}}),baseEnv);
+  assert.equal(response.status,200);
+ });
+ assert.equal(update.stripe_subscription_status,'lifetime');
+});
+
 test('paid customer-selected amount below USD 149.99 does not grant lifetime Pro',async()=>{
  const timestamp=Math.floor(Date.now()/1000);
  const body=JSON.stringify({id:'evt_lifetime_under_minimum',type:'checkout.session.completed',livemode:true,data:{object:{id:'cs_lifetime_under_minimum',mode:'payment',payment_status:'paid',client_reference_id:'user1',payment_link:'plink_lifetime',amount_total:100,currency:'usd',customer:'cus_lifetime'}}});
