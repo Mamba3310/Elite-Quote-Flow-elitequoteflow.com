@@ -99,8 +99,8 @@ test('admin quote status control is owner-protected and records audited updates'
 });
 
 test('sidebar promotes the AI assistant without the redundant growth slogan card',async()=>{
- const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/ai-assistant.css',import.meta.url),'utf8');
- assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.sidebar-bottom\{margin-top:auto/);assert.match(css,/NEED A HAND/);
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');
+ assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.match(html,/class="topbar-ask support-launch"/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/class="sidebar-bottom"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.pro-rail\{grid-column:2/);
 });
 
 test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',async()=>{
