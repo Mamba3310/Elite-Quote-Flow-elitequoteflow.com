@@ -100,8 +100,8 @@ test('admin quote status control is owner-protected and records audited updates'
 
 test('sidebar promotes the AI assistant without the redundant growth slogan card',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
- assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.match(html,/class="sidebar-bottom"/);assert.match(html,/class="help-card support-launch"/);assert.doesNotMatch(html,/class="topbar-ask/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.pro-rail\{grid-column:2/);assert.match(css,/minmax\(0,1fr\) 420px/);assert.match(css,/min-height:calc\(100vh - 108px\)/);
- assert.match(app,/Email verified\. Sign in to open your desk\./);assert.match(app,/verifyOtp\(\{ token_hash: callback\.tokenHash, type: callback\.type \}\)/);
+ assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.match(html,/class="sidebar-bottom"/);assert.match(html,/class="help-card support-launch"/);assert.doesNotMatch(html,/class="topbar-ask/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.pro-rail\{grid-column:1/);assert.match(css,/320px minmax\(0,1fr\)/);assert.match(css,/\.page-content>\*\{grid-column:2/);assert.match(css,/min-height:calc\(100vh - 108px\)/);
+ assert.match(app,/Email verified\. Sign in to open your desk\./);assert.match(app,/verifyOtp\(\{ token_hash: callback\.tokenHash, type: callback\.type \}\)/);assert.match(app,/function renderAcceptedTotal/);assert.match(app,/renderAcceptedTotal\(\$\('#metric-won'\), wonThisMonth\)/);assert.match(css,/\.metric-value\.is-split/);assert.match(css,/\.metric-currency-line/);
 });
 
 test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',async()=>{
