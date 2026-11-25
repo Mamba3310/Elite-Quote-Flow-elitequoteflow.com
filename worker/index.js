@@ -7,6 +7,7 @@ import { runScheduled } from './scheduled.js';
 import { onDepositCheckout } from './deposit-checkout.js';
 import { onInvoiceCheckout } from './invoice-checkout.js';
 import { onSendQuoteEmail } from './send-quote-email.js';
+import { onSendCustomerMessage } from './send-customer-message.js';
 import { onAuthEmail } from './auth-email.js';
 import { onTeamsRequest } from './teams.js';
 import { onReferralsRequest } from './referrals.js';
@@ -15,6 +16,7 @@ import { onAccountAccess } from './pro-access.js';
 import { onCustomerReview } from './customer-reviews.js';
 import { adminPage, onAdminApi } from './admin.js';
 import { onPublicBooking } from './public-booking.js';
+import { onVisitorLocale } from './visitor-locale.js';
 
 const json = (body, status = 200) => Response.json(body, {
   status,
@@ -60,6 +62,7 @@ export default {
       const config = JSON.stringify({ url: env.SUPABASE_URL.trim().replace(/\/$/, ''), anonKey: env.SUPABASE_ANON_KEY.trim() }).replace(/</g, '\u003c');
       return new Response(`window.QUOTEFlow_SUPABASE_CONFIG=Object.freeze(${config});`, { headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
     }
+    if (url.pathname === '/api/visitor-locale') return onVisitorLocale(request);
     if (url.pathname === '/api/account-access') return onAccountAccess(request, env);
     if (url.pathname === '/api/analytics') return onAnalyticsRequest(request, env);
     if (url.pathname === '/api/support-chat') return onSupportChat(request, env);
@@ -71,6 +74,10 @@ export default {
     if (url.pathname === '/api/invoice-checkout') {
       if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
       return onInvoiceCheckout(request, env);
+    }
+    if (url.pathname === '/api/send-customer-message') {
+      if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
+      return onSendCustomerMessage(request, env);
     }
     if (url.pathname === '/api/send-quote-email') {
       if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);

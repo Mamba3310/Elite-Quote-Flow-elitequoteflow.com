@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = 'quoteflow.quotes.v1';
   const CALCULATOR_CURRENCY_KEY = 'calculator-currency';
+  const VISITOR_CURRENCY_KEY = 'quoteflow.visitor-currency';
   const FREE_OPEN_QUOTE_LIMIT = 15;
   const FREE_LINE_ITEM_LIMIT = 1;
   const PRO_LINE_ITEM_LIMIT = 20;
@@ -94,7 +95,7 @@
   const invoiceForm = $('#invoice-form');
   const lineItemsContainer = $('#quote-line-items');
   const emptyState = $('#empty-state');
-  let profile = { fullName: '', businessName: '', phone: '', companyLogoUrl: '', brandColor: '#426DDE', companyAddress: '', taxId: '', isLifetime: false, referralCode: '', referralCreditsMonths: 0 };
+  let profile = { fullName: '', businessName: '', phone: '', companyLogoUrl: '', brandColor: '#426DDE', companyAddress: '', defaultCurrency: '', taxId: '', isLifetime: false, referralCode: '', referralCreditsMonths: 0 };
   let quotes = [];
   let templates = [];
   let teamState = { team: null, members: [], pendingInvites: [] };
@@ -247,6 +248,32 @@
     $('#branded-email-dialog').showModal();
   }
 
+  let messageDraft = null;
+  function syncMessageChannel() {
+    const text = $('#message-form')?.elements.channel.value === 'text';
+    $('#message-email-field').hidden = text;
+    $('#message-subject-field').hidden = text;
+    $('#message-phone-field').hidden = !text;
+    $('#message-send').textContent = text ? 'Open text' : 'Send email';
+    $('#message-footnote').textContent = text ? 'The text opens in your phone with the message you wrote.' : 'Email is sent from your company address. Replies come back to your account.';
+  }
+  function openMessageComposer(draft = {}) {
+    if (!requirePro('Customer messages')) return;
+    messageDraft = draft;
+    const mailbox = brandedMailbox();
+    const form = $('#message-form');
+    form.elements.channel.value = draft.channel || 'email';
+    form.elements.email.value = draft.email || '';
+    form.elements.phone.value = draft.phone || '';
+    form.elements.subject.value = draft.subject || (draft.customer ? `Message for ${draft.customer}` : '');
+    form.elements.body.value = draft.body || (draft.customer ? `Hi ${draft.customer},\n\n` : '');
+    $('#message-from').textContent = `From ${mailbox.name} <${mailbox.address}>`;
+    $('#message-error').textContent = '';
+    syncMessageChannel();
+    if (typeof $('#message-composer').showModal === 'function') $('#message-composer').showModal();
+    else $('#message-composer').setAttribute('open', '');
+  }
+
   function showSignedIn() {
     landingScreen.hidden = true;
     authScreen.hidden = true;
@@ -318,7 +345,14 @@
 
   async function fetchProfile() {
     if (!currentUser) return;
-    let { data, error } = await supabaseClient.from('profiles').select('full_name, business_name, phone, is_pro, stripe_subscription_status, company_logo_url, brand_color, company_address, tax_id, referral_code, referral_credits_months').eq('id', currentUser.id).maybeSingle();
+    let profileSelect = 'full_name, business_name, phone, is_pro, stripe_subscription_status, company_logo_url, brand_color, company_address, tax_id, referral_code, referral_credits_months, default_currency';
+    let { data, error } = await supabaseClient.from('profiles').select(profileSelect).eq('id', currentUser.id).maybeSingle();
+    if (error && /default_currency/i.test(error.message || '')) {
+      profileSelect = profileSelect.replace(', default_currency', '');
+      const retry = await supabaseClient.from('profiles').select(profileSelect).eq('id', currentUser.id).maybeSingle();
+      data = retry.data;
+      error = retry.error;
+    }
     if (error && /tax_id|referral_code|referral_credits|column .* does not exist|schema cache/i.test(error.message || '')) {
       const legacy = await supabaseClient.from('profiles').select('full_name, business_name, phone, is_pro, stripe_subscription_status, company_logo_url, brand_color, company_address').eq('id', currentUser.id).maybeSingle();
       data = legacy.data ? { ...legacy.data, tax_id: currentUser.user_metadata?.tax_id || '', referral_code: '', referral_credits_months: 0 } : null;
@@ -326,12 +360,14 @@
     }
     if (error) throw error;
     if (!data) {
-      const { error: createError } = await supabaseClient.from('profiles').upsert({
+      const { error: createError } = await upsertProfileRow({
         id: currentUser.id,
         full_name: currentUser.user_metadata?.full_name || '',
         business_name: currentUser.user_metadata?.business_name || '',
-        phone: currentUser.user_metadata?.phone || ''
-      }, { onConflict: 'id' });
+        phone: currentUser.user_metadata?.phone || '',
+        company_address: currentUser.user_metadata?.company_address || '',
+        default_currency: CURRENCIES.includes(currentUser.user_metadata?.default_currency) ? currentUser.user_metadata.default_currency : 'USD'
+      });
       if (createError) throw createError;
       return fetchProfile();
     }
@@ -344,7 +380,8 @@
       isLifetime: data?.stripe_subscription_status === 'lifetime',
       companyLogoUrl: data?.company_logo_url || '',
       brandColor: data?.brand_color || '#426DDE',
-      companyAddress: data?.company_address || '',
+      companyAddress: data?.company_address || currentUser.user_metadata?.company_address || '',
+      defaultCurrency: CURRENCIES.includes(data?.default_currency) ? data.default_currency : (CURRENCIES.includes(currentUser.user_metadata?.default_currency) ? currentUser.user_metadata.default_currency : ''),
       taxId: data?.tax_id || currentUser.user_metadata?.tax_id || '',
       referralCode: data?.referral_code || '',
       referralCreditsMonths: Number(data?.referral_credits_months || 0)
@@ -361,7 +398,32 @@
       console.warn('Could not check staff access', error);
     }
     renderProfile();
+    await rememberAccountAddress();
     loadGrowthExtras().catch(() => {});
+  }
+
+  async function upsertProfileRow(row) {
+    let result = await supabaseClient.from('profiles').upsert(row, { onConflict: 'id' });
+    if (result.error && /default_currency|schema cache/i.test(result.error.message || '') && Object.prototype.hasOwnProperty.call(row, 'default_currency')) {
+      const { default_currency: _ignored, ...rest } = row;
+      result = await supabaseClient.from('profiles').upsert(rest, { onConflict: 'id' });
+    }
+    return result;
+  }
+
+  async function rememberAccountAddress() {
+    const address = String(profile.companyAddress || currentUser?.user_metadata?.company_address || '').trim();
+    if (address && !profile.companyAddress) {
+      profile.companyAddress = address;
+      await supabaseClient.from('profiles').update({ company_address: address, updated_at: new Date().toISOString() }).eq('id', currentUser.id);
+    }
+    if (address || !profileDialog || profileDialog.open) return;
+    openProfileDialog();
+    const saveError = $('#profile-save-error');
+    saveError.classList.remove('is-success');
+    saveError.textContent = 'Add your address. It is saved on your account with your name.';
+    saveError.hidden = false;
+    profileForm.elements.companyAddress.focus();
   }
 
   async function authHeaders() {
@@ -448,7 +510,6 @@
     if (!isPro()) {
       values.companyLogoUrl = profile.companyLogoUrl || '';
       values.brandColor = profile.brandColor || '#426DDE';
-      values.companyAddress = profile.companyAddress || '';
       values.taxId = profile.taxId || '';
     }
     const nextEmail = values.email.trim();
@@ -471,7 +532,7 @@
     renderProfile();
 
     let profileTableWarning = '';
-    const { error: profileError } = await supabaseClient.from('profiles').upsert({
+    const { error: profileError } = await upsertProfileRow({
       id: currentUser.id,
       full_name: values.fullName,
       business_name: values.businessName,
@@ -479,8 +540,9 @@
       company_logo_url: values.companyLogoUrl,
       brand_color: values.brandColor,
       company_address: values.companyAddress,
+      default_currency: CURRENCIES.includes(profile.defaultCurrency) ? profile.defaultCurrency : calculatorCurrency,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'id' });
+    });
     if (profileError) profileTableWarning = ` Profile backup could not sync: ${profileError.message}`;
 
     if (nextEmail && nextEmail.toLowerCase() !== currentUser.email?.toLowerCase()) {
@@ -1025,8 +1087,8 @@
       } else if (currentUser) {
         showSignedIn();
         if (!callback.consumed && ['signup', 'email', 'magiclink', 'invite'].includes(callback.type)) showToast('Email verified. Welcome to Elite Quote Flow.');
-        loadCalculatorPreferences(currentUser.id);
         await fetchProfile();
+        await loadCalculatorPreferences(currentUser.id);
         await initializeOwnerAnalytics();
         await refreshQuotes();
         await handleCheckoutReturn();
@@ -1051,7 +1113,7 @@
       const nextUser = session?.user || null;
       const previousId = currentUser?.id;
       currentUser = nextUser;
-      if (nextUser && previousId !== nextUser.id) loadCalculatorPreferences(nextUser.id);
+      if (nextUser && previousId !== nextUser.id) loadCalculatorPreferences(nextUser.id).catch(() => {});
       if (event === 'PASSWORD_RECOVERY' && nextUser) {
         showSignedOut('recovery');
       } else if (!nextUser) {
@@ -1070,6 +1132,7 @@
         window.setTimeout(async () => {
           if (currentUser?.id !== nextUser.id) return;
           await fetchProfile();
+          await loadCalculatorPreferences(nextUser.id);
           await initializeOwnerAnalytics();
           await refreshQuotes();
           offerLocalImport();
@@ -1154,7 +1217,7 @@
     ].map(([value, label]) => `<option value="${value}" ${quote.status === value ? 'selected' : ''}>${label}</option>`).join('');
     const contact = [quote.email, quote.phone].filter(Boolean).map(escapeHTML).join(' · ');
     const referral = quote.referralSource ? `<span class="customer-referral" title="Referral source">From ${escapeHTML(quote.referralSource)}</span>` : '';
-    const actions = `<div class="row-actions">${quote.status === 'sent' ? `<button class="row-email" type="button" aria-label="Send follow-up email to ${escapeHTML(quote.customer)}" title="Send follow-up email" ${quote.email ? '' : 'disabled'}>✉</button>${quote.phone ? `<a class="row-call" href="tel:${escapeHTML(quote.phone.replace(/[^\d+]/g, ''))}" aria-label="Call ${escapeHTML(quote.customer)}" title="Call customer">☎</a>` : ''}` : ''}<button class="row-share-quote" type="button" aria-label="Copy customer quote link for ${escapeHTML(quote.customer)}" title="Copy customer quote link">🔗</button><button class="row-send-quote" type="button" aria-label="Draft quote email to ${escapeHTML(quote.customer)}" title="Draft quote email" ${quote.email ? '' : 'disabled'}>➤</button><button class="row-print-quote" type="button" aria-label="Print proposal for ${escapeHTML(quote.customer)}" title="Print or save as PDF">▤</button><button class="row-edit" type="button" aria-label="Edit quote for ${escapeHTML(quote.customer)}" title="Edit quote">✎</button><button class="row-delete" type="button" aria-label="Delete quote for ${escapeHTML(quote.customer)}" title="Delete quote">×</button></div>`;
+    const actions = `<div class="row-actions"><button class="row-message" type="button" aria-label="Message ${escapeHTML(quote.customer)}" title="Write an email or text">✎</button>${quote.status === 'sent' ? `<button class="row-email" type="button" aria-label="Send follow-up email to ${escapeHTML(quote.customer)}" title="Send follow-up email" ${quote.email ? '' : 'disabled'}>✉</button>${quote.phone ? `<a class="row-call" href="tel:${escapeHTML(quote.phone.replace(/[^\d+]/g, ''))}" aria-label="Call ${escapeHTML(quote.customer)}" title="Call customer">☎</a>` : ''}` : ''}<button class="row-share-quote" type="button" aria-label="Copy customer quote link for ${escapeHTML(quote.customer)}" title="Copy customer quote link">🔗</button><button class="row-send-quote" type="button" aria-label="Draft quote email to ${escapeHTML(quote.customer)}" title="Draft quote email" ${quote.email ? '' : 'disabled'}>➤</button><button class="row-print-quote" type="button" aria-label="Print proposal for ${escapeHTML(quote.customer)}" title="Print or save as PDF">▤</button><button class="row-edit" type="button" aria-label="Edit quote for ${escapeHTML(quote.customer)}" title="Edit quote">✎</button><button class="row-delete" type="button" aria-label="Delete quote for ${escapeHTML(quote.customer)}" title="Delete quote">×</button></div>`;
     return `<tr data-id="${escapeHTML(quote.id)}">
       <td><div class="customer-cell"><span class="customer-avatar">${escapeHTML(initials(quote.customer))}</span><span><button type="button" class="customer-name customer-history-open" data-customer-history="${escapeHTML(quote.email?.toLowerCase() || quote.customer.toLowerCase())}" aria-label="View history for ${escapeHTML(quote.customer)}">${escapeHTML(quote.customer)}</button>${contact ? `<span class="customer-contact">${contact}</span>` : ''}${referral}${quote.note ? `<span class="customer-note" title="${escapeHTML(quote.note)}">${escapeHTML(quote.note)}</span>` : ''}</span></div></td>
       <td class="service-cell">${escapeHTML(quote.service)}${quote.lineItems?.length ? `<span class="customer-contact">${quote.lineItems.length} item${quote.lineItems.length === 1 ? '' : 's'}${quote.viewCount ? ` · ${quote.viewCount} view${quote.viewCount === 1 ? '' : 's'}` : ''}</span>` : quote.viewCount ? `<span class="customer-contact">${quote.viewCount} view${quote.viewCount === 1 ? '' : 's'}</span>` : ''}</td>
@@ -1450,13 +1513,33 @@
     }
   }
 
-  function loadCalculatorPreferences(userId) {
+  async function loadCalculatorPreferences(userId) {
     for (const id of ['calc-hours', 'calc-rate', 'calc-materials', 'calc-margin']) {
       const stored = localStorage.getItem(`quoteflow.${userId}.${id}`);
       if (stored !== null) $(`#${id}`).value = stored;
     }
-    const storedCurrency = localStorage.getItem(`quoteflow.${userId}.${CALCULATOR_CURRENCY_KEY}`) || (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Africa/Lagos' || Intl.DateTimeFormat().resolvedOptions().locale?.endsWith('-NG') ? 'NGN' : 'USD');
-    setCalculatorCurrency(storedCurrency, false);
+    const storedCurrency = localStorage.getItem(`quoteflow.${userId}.${CALCULATOR_CURRENCY_KEY}`);
+    if (CURRENCIES.includes(storedCurrency)) {
+      setCalculatorCurrency(storedCurrency, false);
+      return;
+    }
+    const detected = await detectVisitorCurrency();
+    setCalculatorCurrency(detected || (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Africa/Lagos' || Intl.DateTimeFormat().resolvedOptions().locale?.endsWith('-NG') ? 'NGN' : 'USD'), false);
+  }
+
+  async function detectVisitorCurrency() {
+    try {
+      const saved = localStorage.getItem(VISITOR_CURRENCY_KEY);
+      if (CURRENCIES.includes(saved)) return saved;
+    } catch { /* Ask the site which currency matches this visit. */ }
+    try {
+      const response = await fetch('/api/visitor-locale', { headers: { Accept: 'application/json' } });
+      if (!response.ok) return '';
+      const body = await response.json();
+      if (!CURRENCIES.includes(body.currency) || body.ip) return '';
+      try { localStorage.setItem(VISITOR_CURRENCY_KEY, body.currency); } catch { /* Keep the detected currency for this visit. */ }
+      return body.currency;
+    } catch { return ''; }
   }
 
   function checkReminders() {
@@ -1768,6 +1851,7 @@
     const feature = link.dataset.proFeature;
     const action = link.dataset.featureAction;
     if (action === 'branded-email') showBrandedEmail();
+    else if (action === 'message') openMessageComposer();
     else {
       if (feature && !isPro()) requirePro(feature);
       if (action === 'templates' && (!feature || isPro())) $('#manage-templates-button')?.click();
@@ -1831,6 +1915,7 @@
   templateForm.elements.currency.innerHTML = currencyOptions;
   $('#calc-currency').innerHTML = currencyOptions;
   setCalculatorCurrency('USD', false);
+  detectVisitorCurrency().then(currency => { if (currency && !currentUser) setCalculatorCurrency(currency, false); });
   form.elements.currency.addEventListener('change', () => {
     $('#quote-currency-label').textContent = form.elements.currency.value;
     form.elements.amount.step = currencyStep(form.elements.currency.value);
@@ -1978,7 +2063,7 @@
     const mailto = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     if (!isPro()) {
       window.location.href = mailto;
-      return;
+      return true;
     }
     try {
       const headers = await authHeaders();
@@ -1986,11 +2071,13 @@
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not send the email.');
       showToast(result.from ? `${successLabel} as ${result.from}.` : `${successLabel}.`);
+      return true;
     } catch (error) {
       showToast(error.message || 'Could not send the email.', 9000, {
         error: true,
         action: { label: 'Open email app', onClick: () => { window.location.href = mailto; } }
       });
+      return false;
     }
   }
 
@@ -2011,6 +2098,10 @@
       try { await makeQuoteShareable(quote); } catch (error) { showToast(`Could not create quote link: ${error.message}`); }
       return;
     }
+    if (event.target.closest('.row-message')) {
+      openMessageComposer({ email: quote.email, phone: quote.phone, customer: quote.customer, quote, successLabel: 'Message sent' });
+      return;
+    }
     if (event.target.closest('.row-send-quote')) {
       if (!quote.email) return showToast('Add the customer email before drafting a quote email.');
       if (!quote.publicToken) {
@@ -2021,6 +2112,7 @@
       const subject = `Your ${quote.service} quote from ${profile.businessName || 'our team'}`;
       const followUpDate = shortDate(quote.followUp);
       const body = `Hi ${quote.customer},\n\nThank you for the opportunity to provide a quote for ${quote.service}.\n\nQuote total: ${formatMoney(quote.amount, quote.currency)}\n\nReview and respond to your quote: ${quoteLink}\n\nPlease let me know if you have any questions. I’ll plan to follow up on ${followUpDate}.\n\nBest,\n${profile.fullName || ''}${profile.businessName ? `\n${profile.businessName}` : ''}${profile.phone ? `\n${profile.phone}` : ''}`;
+      if (isPro()) return openMessageComposer({ email: quote.email, phone: quote.phone, customer: quote.customer, subject, body, quote, successLabel: 'Quote email sent' });
       await sendCustomerEmail(quote, subject, body, 'Quote email sent');
       return;
     }
@@ -2033,6 +2125,7 @@
       const quoteLink = `${window.location.origin}/q/${quote.publicToken}`;
       const subject = `Following up on your ${quote.service} quote`;
       const body = `Hi ${quote.customer},\n\nI wanted to follow up on the quote for ${quote.service} (${formatMoney(quote.amount, quote.currency)}).\n\nReview your quote: ${quoteLink}\n\nDo you have any questions, or is there anything else I can help with?\n\nBest,\n${profile.fullName || ''}${profile.businessName ? `\n${profile.businessName}` : ''}`;
+      if (isPro()) return openMessageComposer({ email: quote.email, phone: quote.phone, customer: quote.customer, subject, body, quote, successLabel: 'Follow-up sent' });
       await sendCustomerEmail(quote, subject, body, 'Follow-up sent');
       return;
     }
@@ -2422,6 +2515,51 @@
   $('#register-signin').addEventListener('click', () => showSignedOut('signin'));
   $('#auth-mode-toggle').addEventListener('click', showRegistration);
   $('#header-profile-button').addEventListener('click', openProfileDialog);
+  $('#message-form')?.querySelectorAll('[name="channel"]').forEach(input => input.addEventListener('change', syncMessageChannel));
+  $('#message-close')?.addEventListener('click', () => $('#message-composer')?.close());
+  $('#message-cancel')?.addEventListener('click', () => $('#message-composer')?.close());
+  $('#message-composer')?.addEventListener('click', event => { if (event.target === $('#message-composer')) $('#message-composer').close(); });
+  $('#message-form')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!requirePro('Customer messages')) return;
+    const messageForm = event.currentTarget;
+    const channel = messageForm.elements.channel.value;
+    const body = messageForm.elements.body.value.trim();
+    const error = $('#message-error');
+    error.textContent = '';
+    if (body.length < 2) { error.textContent = 'Write the message first.'; return; }
+    if (channel === 'text') {
+      const phone = messageForm.elements.phone.value.replace(/[^\d+]/g, '');
+      if (phone.length < 7) { error.textContent = 'Enter the customer phone number.'; return; }
+      window.location.href = `sms:${phone}?&body=${encodeURIComponent(body)}`;
+      $('#message-composer').close();
+      showToast('Text opened on this phone with your message.');
+      return;
+    }
+    const email = messageForm.elements.email.value.trim();
+    const subject = messageForm.elements.subject.value.trim();
+    if (!messageForm.elements.email.checkValidity() || !email) { error.textContent = 'Enter the customer email.'; return; }
+    if (!subject) { error.textContent = 'Enter a subject.'; return; }
+    const button = $('#message-send');
+    button.disabled = true;
+    try {
+      if (messageDraft?.quote) {
+        const sent = await sendCustomerEmail(messageDraft.quote, subject, body, messageDraft.successLabel || 'Message sent');
+        if (sent) $('#message-composer').close();
+        return;
+      }
+      const headers = await authHeaders();
+      const response = await fetch('/api/send-customer-message', { method: 'POST', headers, body: JSON.stringify({ to: email, subject, body }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not send the message.');
+      showToast(result.from ? `Message sent as ${result.from}.` : 'Message sent.');
+      $('#message-composer').close();
+    } catch (sendError) {
+      error.textContent = sendError.message || 'Could not send the message.';
+    } finally {
+      button.disabled = false;
+    }
+  });
   $('#branded-email-close')?.addEventListener('click', () => $('#branded-email-dialog')?.close());
   $('#branded-email-dialog')?.addEventListener('click', event => { if (event.target === $('#branded-email-dialog')) $('#branded-email-dialog').close(); });
   $('#branded-email-profile')?.addEventListener('click', () => { $('#branded-email-dialog')?.close(); openProfileDialog(); });

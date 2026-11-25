@@ -16,6 +16,7 @@
 .free-limit-note{margin:0 0 14px;padding:12px 14px;border:1px solid #d9dee8;border-radius:10px;background:#f7f9fc;color:#3b465c;font-size:13px;line-height:1.5}
 .pro-only-field.is-locked{opacity:.72}
 .pro-only-field.is-locked::after{display:block;margin-top:6px;color:#667085;font-size:11px;content:"Included with Pro"}
+.message-channels{display:flex;gap:16px}.message-channels label{display:flex;align-items:center;gap:6px;color:#e8eef8;font-weight:700}.message-from{margin:0;color:#f1bd63;font-weight:700}
 .invoice-actions{display:flex;flex-wrap:wrap;gap:8px}
 .growth-list-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #e6ebf2}
 
