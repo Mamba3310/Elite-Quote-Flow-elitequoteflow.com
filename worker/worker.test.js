@@ -372,7 +372,8 @@ test('scheduled job expires quotes, emails Pro owners only, and persists reminde
   if(target.includes('/rest/v1/profiles?')&&target.includes('is_pro=eq.true'))return Response.json([{id:'user1'}]);
   if(target.includes('/rest/v1/profiles?')&&target.includes('select=id,business_name'))return Response.json([{id:'user1',business_name:'Acme Pros'}]);
   if(target.includes('/rest/v1/recurring_service_plans?'))return Response.json([]);
-  if(target==='https://api.resend.com/emails'){emailSent=true;return Response.json({id:'email'});}
+  if(target.includes('/auth/v1/admin/users/'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target==='https://api.resend.com/emails'){emailSent=true;const body=JSON.parse(options.body);assert.equal(body.from,'Acme Pros <acme-pros@example.com>');assert.equal(body.reply_to,'owner@example.com');return Response.json({id:'email'});}
   if(options.method==='PATCH'){patchCount++;return new Response(null,{status:204});}
   assert.fail(`Unexpected upstream request ${target}`);
  },async()=>{
@@ -390,7 +391,8 @@ test('follow-up automation uses staged gentle messages after due date',async()=>
   if(target.includes('/rest/v1/profiles?')&&target.includes('is_pro=eq.true'))return Response.json([{id:'user1'}]);
   if(target.includes('/rest/v1/profiles?')&&target.includes('select=id,business_name'))return Response.json([{id:'user1',business_name:'Acme'}]);
   if(target.includes('/rest/v1/recurring_service_plans?'))return Response.json([]);
-  if(target==='https://api.resend.com/emails'){const body=JSON.parse(options.body);subject=body.subject;text=body.text;return Response.json({id:'email'});}
+  if(target.includes('/auth/v1/admin/users/'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target==='https://api.resend.com/emails'){const body=JSON.parse(options.body);subject=body.subject;text=body.text;assert.equal(body.from,'Acme <acme@example.com>');assert.equal(body.reply_to,'owner@example.com');return Response.json({id:'email'});}
   if(options.method==='PATCH')return new Response(null,{status:204});
   assert.fail(`Unexpected ${target}`);
  },async()=>{await runScheduled({...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com',PUBLIC_APP_URL:'https://app.example'},new Date('2025-01-05T09:00:00Z'));});
@@ -416,31 +418,46 @@ test('scheduled job enforces 24-hour quiet period and paginates quote results',a
 
 test('invoice checkout and send-quote-email require Pro and create Stripe or Resend requests',async()=>{
  const id='550e8400-e29b-41d4-a716-446655440000';
- await withMockedFetch(async url=>{
+ let sentFrom='';
+ await withMockedFetch(async(url,options={})=>{
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
   if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,business_name:'Acme',full_name:'Alex Owner'}]);
   if(target.includes('/rest/v1/quotes?'))return Response.json([{id,customer:'Casey',email:'casey@example.com',service:'Repair',amount:200,currency:'USD',status:'won',invoice_status:'unpaid',deposit_percent:25,deposit_paid_at:'2025-01-01T00:00:00Z',public_token:id}]);
   if(target==='https://api.stripe.com/v1/checkout/sessions')return Response.json({id:'cs_inv',url:'https://checkout.stripe.com/invoice'});
-  if(target==='https://api.resend.com/emails')return Response.json({id:'email_1'});
+  if(target==='https://api.resend.com/emails'){sentFrom=JSON.parse(options.body).from;return Response.json({id:'email_1'});}
   if(target.includes('/rest/v1/quotes?id=eq.'))return new Response(null,{status:204});
   assert.fail(`Unexpected ${target}`);
  },async()=>{
   const invoice=await worker.fetch(jsonRequest('https://app.example/api/invoice-checkout',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);
   assert.equal(invoice.status,200);assert.equal((await invoice.json()).url,'https://checkout.stripe.com/invoice');
   const email=await worker.fetch(jsonRequest('https://app.example/api/send-quote-email',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
-  assert.equal(email.status,200);assert.equal((await email.json()).sent,true);
+  const body=await email.json();
+  assert.equal(email.status,200);assert.equal(body.sent,true);assert.equal(body.from,'Acme <acme@example.com>');
  });
+ assert.equal(sentFrom,'Acme <acme@example.com>');
+});
+
+test('business sender addresses use the business name and avoid platform mailboxes',async()=>{
+ const {businessSender}=await import('./sender-address.js');
+ const sender=businessSender({RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com',PUBLIC_APP_URL:'https://elitequoteflow.com'},{businessName:"José's Painting & Co",replyTo:'Owner@Example.com'});
+ assert.equal(sender.address,'joses-painting-and-co@elitequoteflow.com');
+ assert.equal(sender.replyTo,'owner@example.com');
+ assert.equal(sender.from,"José's Painting & Co <joses-painting-and-co@elitequoteflow.com>");
+ const reserved=businessSender({RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com'},{businessName:'Support'});
+ assert.equal(reserved.address,'support-studio@elitequoteflow.com');
+ const named=businessSender({RESEND_FROM_DOMAIN:'mail.example.com',RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com'},{businessName:'Acme Painting'});
+ assert.equal(named.address,'acme-painting@mail.example.com');
 });
 
 test('staff review accounts can use Pro actions without a paid subscription',async()=>{
  const id='550e8400-e29b-41d4-a716-446655440000';
- await withMockedFetch(async url=>{
+ await withMockedFetch(async(url,options={})=>{
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
   if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:false,business_name:'Acme',full_name:'Alex Owner'}]);
   if(target.includes('/rest/v1/quotes?'))return Response.json([{id,customer:'Casey',email:'casey@example.com',service:'Repair',amount:200,currency:'USD',public_token:id}]);
-  if(target==='https://api.resend.com/emails')return Response.json({id:'email_staff'});
+  if(target==='https://api.resend.com/emails'){const body=JSON.parse(options.body);assert.equal(body.from,'Acme <acme@example.com>');assert.equal(body.reply_to,'owner@example.com');return Response.json({id:'email_staff'});}
   assert.fail(`Unexpected ${target}`);
  },async()=>{
   const denied=await worker.fetch(jsonRequest('https://app.example/api/send-quote-email',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});

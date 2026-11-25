@@ -1,4 +1,5 @@
-import { json, requireProUser, supabaseBase, readJson } from './pro-access.js';
+import { json, requireProUser, readJson } from './pro-access.js';
+import { businessSender } from './sender-address.js';
 
 function escapeText(value) {
   return String(value || '').replace(/\r?\n/g, '\n').trim();
@@ -27,8 +28,14 @@ export async function onSendQuoteEmail(request, env) {
 
   const appUrl = (env.PUBLIC_APP_URL || new URL(request.url).origin).replace(/\/$/, '');
   const link = `${appUrl}/q/${quote.public_token}`;
-  const business = escapeText(access.profile.business_name || access.profile.full_name || 'our team');
-  const fromName = business.slice(0, 60);
+  const profile = access.profile || {};
+  const sender = businessSender(env, {
+    businessName: profile.business_name,
+    fullName: profile.full_name,
+    replyTo: access.user.email
+  });
+  if (!sender) return json({ error: 'In-app email sending is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL, or use your email app to send the quote.' }, 503);
+  const fromName = sender.name === 'Elite Quote Flow' ? 'our team' : sender.name;
   const subject = escapeText(payload.subject) || `Your ${quote.service} quote from ${fromName}`;
   const body = escapeText(payload.body) || [
     `Hi ${quote.customer},`,
@@ -40,16 +47,16 @@ export async function onSendQuoteEmail(request, env) {
     '',
     `Best,`,
     fromName,
-    access.profile.phone || ''
+    profile.phone || ''
   ].filter(Boolean).join('\n');
 
   const resend = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY.trim()}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: `${fromName} <${env.RESEND_FROM_EMAIL.trim()}>`,
+      from: sender.from,
       to: [quote.email],
-      reply_to: access.user.email || undefined,
+      reply_to: sender.replyTo || undefined,
       subject,
       text: body
     })
@@ -59,5 +66,5 @@ export async function onSendQuoteEmail(request, env) {
     console.error('Resend quote email failed', resend.status, result?.message || result?.error || 'unknown');
     return json({ error: 'Could not send the quote email. Try again or use your email app.' }, 502);
   }
-  return json({ sent: true, id: result?.id || null, link });
+  return json({ sent: true, id: result?.id || null, link, from: sender.from });
 }

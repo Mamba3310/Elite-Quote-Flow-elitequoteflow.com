@@ -1,3 +1,5 @@
+import { businessSender } from './sender-address.js';
+
 const jsonHeaders = { 'Content-Type': 'application/json' };
 const MAX_QUOTES_PER_RUN = 100;
 const MAX_PLANS_PER_RUN = 100;
@@ -29,10 +31,10 @@ async function fetchProOwners(base, key, userIds) {
   return pro;
 }
 
-async function sendReminder(env, quote, stage = 0, businessName = '') {
-  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL || !quote.email) return false;
+async function sendReminder(env, quote, stage = 0, businessName = '', replyTo = '') {
+  const sender = businessSender(env, { businessName, replyTo });
+  if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL || !sender || !quote.email) return false;
   const link = `${env.PUBLIC_APP_URL || 'https://elitequoteflow.com'}/q/${quote.public_token}`;
-  const fromLabel = (businessName || 'Elite Quote Flow').slice(0, 60);
   const messages = [
     { subject: `Your ${quote.service} quote is ready`, text: `Hello ${quote.customer},\n\nJust a quick note that your quote for ${quote.service} is ready to review. You can view the quote and let us know what you think here:\n${link}\n\nPlease reply to this email if you have questions.` },
     { subject: `Any questions about your ${quote.service} quote?`, text: `Hello ${quote.customer},\n\nI wanted to check whether you had any questions about the quote for ${quote.service}. If anything needs clarification, you can review it here or reply to this email:\n${link}\n\nNo pressure; happy to help.` },
@@ -43,13 +45,29 @@ async function sendReminder(env, quote, stage = 0, businessName = '') {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, ...jsonHeaders },
     body: JSON.stringify({
-      from: `${fromLabel} <${env.RESEND_FROM_EMAIL}>`,
+      from: sender.from,
       to: [quote.email],
+      reply_to: sender.replyTo || undefined,
       subject: message.subject,
       text: message.text
     })
   });
   return response.ok;
+}
+
+async function ownerReplyTo(base, key, userId, cache) {
+  if (cache.has(userId)) return cache.get(userId);
+  let email = '';
+  try {
+    const response = await fetch(`${base}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` }
+    });
+    if (response.ok) email = (await response.json())?.email || '';
+  } catch (error) {
+    console.error('Could not load owner email for reply-to', userId, error.message);
+  }
+  cache.set(userId, email);
+  return email;
 }
 
 function nextServiceDate(current, frequency) {
@@ -128,6 +146,7 @@ export async function runScheduled(env, now = new Date()) {
   const quotes = await fetchDueQuotes(base, key, today);
   const proOwners = await fetchProOwners(base, key, quotes.map(quote => quote.user_id));
   const businessNames = new Map();
+  const ownerEmails = new Map();
   if (proOwners.size) {
     const ids = [...proOwners];
     for (let i = 0; i < ids.length; i += 50) {
@@ -165,7 +184,7 @@ export async function runScheduled(env, now = new Date()) {
       const dueForStage = dueAt && now.getTime() >= dueAt.getTime() + (cadenceDays[reminderCount] ?? Infinity) * 24 * 60 * 60 * 1000;
       const quietPeriodElapsed = !last || now.getTime() - last.getTime() >= 24 * 60 * 60 * 1000;
       if (dueForStage && quietPeriodElapsed && reminderCount < 3) {
-        const sent = await sendReminder(env, quote, reminderCount, businessNames.get(quote.user_id) || '');
+        const sent = await sendReminder(env, quote, reminderCount, businessNames.get(quote.user_id) || '', await ownerReplyTo(base, key, quote.user_id, ownerEmails));
         if (sent) {
           const update = await fetch(`${base}/rest/v1/quotes?id=eq.${encodeURIComponent(quote.id)}&status=eq.sent`, {
             method: 'PATCH',
