@@ -99,8 +99,17 @@ test('admin quote status control is owner-protected and records audited updates'
 });
 
 test('sidebar promotes the AI assistant without the redundant growth slogan card',async()=>{
- const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/ai-assistant.css',import.meta.url),'utf8');
- assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.sidebar-bottom\{margin-top:auto/);assert.match(css,/NEED A HAND/);
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.match(html,/class="sidebar-bottom"/);assert.match(html,/class="help-card support-launch"/);assert.doesNotMatch(html,/class="topbar-ask/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.desk-rail\{grid-column:1/);assert.match(css,/320px minmax\(0,1fr\)/);assert.match(css,/\.page-content>\*\{grid-column:2/);assert.match(css,/min-height:calc\(100vh - 118px\)/);assert.match(html,/class="free-rail"/);assert.match(html,/id="import-estimate-button"/);assert.match(html,/id="invite-button"/);assert.match(html,/Included on every account/);assert.doesNotMatch(html,/class="breadcrumb"/);assert.match(html,/class="workspace-label"/);assert.match(app,/CURRENCIES\.includes\(calculatorCurrency\)/);
+ assert.match(app,/Email verified\. Sign in to open your desk\./);assert.match(app,/verifyOtp\(\{ token_hash: callback\.tokenHash, type: callback\.type \}\)/);assert.match(app,/function renderAcceptedTotal/);assert.match(app,/renderAcceptedTotal\(\$\('#metric-won'\), wonThisMonth\)/);assert.match(css,/\.metric-value\.is-split/);assert.match(css,/\.metric-currency-line/);
+});
+
+test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',async()=>{
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');
+ for (const label of ['Overview','Quotes','Follow-ups','Calendar','Calculator','Templates','Import estimate','Customer history','Invoices','Appointments']) assert.match(html,new RegExp(`>${label}(?: <span|</button>)`));
+ for (const label of ['Branded email','Deposits','Multi-item quotes','Auto reminders','AI drafting','Exports','Teams','Collect invoices','Recurring','Referrals']) assert.match(html,new RegExp(`${label} <span class="pro-badge">PRO</span>`));
+ assert.match(html,/data-pro-feature="Team invites"/);assert.match(app,/if \(feature && !isPro\(\)\) requirePro\(feature\)/);assert.match(app,/button\.hidden = false/);assert.match(app,/if \(!requirePro\('Quote export'\)\) return/);assert.match(css,/\.nav-link\.is-locked \.pro-badge/);
+ assert.match(html,/id="takeout-bar"/);assert.match(html,/id="branded-email-dialog"/);assert.match(html,/rel="icon" href="\/favicon.svg"/);assert.match(app,/function showBrandedEmail/);assert.match(app,/action === 'branded-email'/);assert.match(css,/\.sidebar\{position:fixed[^}]*width:300px/);
 });
 
 test('calculator currency control offers supported currencies and updates results and estimate currency',async()=>{
@@ -122,8 +131,29 @@ test('Nigerian naira is available for quotes, templates, and calculator pricing'
 test('owner analytics reports aggregate quote views and decisions by country',async()=>{
  const queries=[];const analytics={writeDataPoint(){},query:async sql=>{queries.push(sql);if(sql.includes("INTERVAL '5' MINUTE"))return {data:[{visits:3}]};if(sql.includes('AS hour'))return {data:[{hour:'2025-01-01 10:00:00',visits:5}]};if(sql.includes('AS path'))return {data:[{path:'/',visits:9}]};if(sql.includes('SELECT SUM(double1) AS visits'))return {data:[{visits:18}]};if(sql.includes('AS source'))return {data:[{source:'example.com',visits:7}]};if(sql.includes('blob3 AS country, blob5 AS decision'))return {data:[{country:'CA',decision:'accepted',decisions:2}]};if(sql.includes('AS country'))return {data:[{country:'CA',visits:4},{country:'Unknown',visits:2}]};if(sql.includes('AS views'))return {data:[{views:6}]};return {data:[{decision:'accepted',decisions:2},{decision:'declined',decisions:1}]};}};
  await withMockedFetch(async url=>{assert.ok(String(url).endsWith('/auth/v1/user'));return Response.json({email:'owner@example.com'});},async()=>{
-  const response=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics',{headers:{Authorization:`Bearer ${ownerToken}`}}),{...baseEnv,OWNER_ANALYTICS_EMAILS:'owner@example.com',SITE_ANALYTICS:analytics});assert.equal(response.status,200);const data=await response.json();assert.equal(data.visits24h,18);assert.equal(data.visits5m,3);assert.deepEqual(data.hourly,[{hour:'2025-01-01 10:00:00',visits:5}]);assert.deepEqual(data.pages,[{path:'/',visits:9}]);assert.equal(data.quoteViews24h,6,JSON.stringify(data));assert.deepEqual(data.decisions24h,{accepted:2,declined:1});assert.deepEqual(data.decisionsByCountry,[{country:'CA',decision:'accepted',count:2}]);assert.deepEqual(data.countries,[{name:'CA',visits:4},{name:'Unknown',visits:2}]);
+  const response=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics',{headers:{Authorization:`Bearer ${ownerToken}`}}),{...baseEnv,OWNER_ANALYTICS_EMAILS:'owner@example.com',SITE_ANALYTICS:analytics});assert.equal(response.status,200);const data=await response.json();assert.equal(data.visits24h,18);assert.equal(data.visits5m,3);assert.deepEqual(data.hourly,[{hour:'2025-01-01 10:00:00',visits:5}]);assert.deepEqual(data.pages,[{path:'/',visits:9}]);assert.equal(data.quoteViews24h,6,JSON.stringify(data));assert.deepEqual(data.decisions24h,{accepted:2,declined:1});assert.deepEqual(data.decisionsByCountry,[{country:'CA',decision:'accepted',count:2}]);assert.deepEqual(data.countries,[{name:'CA',visits:4},{name:'Unknown',visits:2}]);assert.equal(data.visitors,undefined);assert.doesNotMatch(JSON.stringify(data),/\d{1,3}(?:\.\d{1,3}){3}/);
  });assert.equal(queries.length,9);assert.ok(queries.every(sql=>sql.includes('INTERVAL')||sql.includes("timestamp > NOW()")));
+});
+
+test('visitor IP addresses are stored and returned only to the admin analytics view',async()=>{
+ const events=[];
+ const env={SITE_ANALYTICS:{writeDataPoint:event=>events.push(event),query:async sql=>sql.includes('blob6 AS ip')?{data:[{ip:'203.0.113.9',country:'NG',path:'/',event:'pageview',visits:2},{ip:'not-an-ip',country:'US',path:'/',event:'pageview',visits:1}]}:{data:[{visits:1},{source:'direct',visits:1},{country:'NG',visits:1},{views:0},{decision:'accepted',decisions:0},{hour:'2025-01-01 10:00:00',visits:1},{path:'/',visits:1}]}},SUPABASE_URL:baseEnv.SUPABASE_URL,SUPABASE_ANON_KEY:baseEnv.SUPABASE_ANON_KEY,OWNER_ANALYTICS_EMAIL:'owner@example.com'};
+ await withMockedFetch(async url=>{if(String(url).endsWith('/auth/v1/user'))return Response.json({email:'owner@example.com'});assert.fail(`Unexpected upstream ${url}`);},async()=>{
+  const recorded=await worker.fetch(jsonRequest('https://elitequoteflow.com/api/analytics',{event:'pageview',path:'/',referrer:'https://search.example/'},'POST',{'CF-Connecting-IP':'203.0.113.9','CF-IPCountry':'NG'}),env);
+  const recordedBody=await recorded.json();assert.equal(recorded.status,202);assert.equal(recordedBody.received,true);assert.equal(recordedBody.ip,undefined);assert.doesNotMatch(JSON.stringify(recordedBody),/203/);
+  const locale=await worker.fetch(new Request('https://elitequoteflow.com/api/visitor-locale',{headers:{'CF-IPCountry':'NG','CF-Connecting-IP':'203.0.113.9'}}),env);
+  const localeBody=await locale.json();assert.equal(locale.status,200);assert.equal(localeBody.currency,'NGN');assert.equal(localeBody.ip,undefined);
+  const hidden=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics',{headers:{Authorization:`Bearer ${ownerToken}`}}),env);
+  assert.equal((await hidden.json()).visitors,undefined);
+  const denied=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics?detail=ips'),env);
+  assert.equal(denied.status,403);
+  const shown=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics?detail=ips',{headers:{Authorization:`Bearer ${ownerToken}`}}),env);
+  const body=await shown.json();
+  assert.equal(shown.status,200);assert.deepEqual(body.visitors,[{ip:'203.0.113.9',country:'NG',path:'/',event:'pageview',visits:2}]);
+ });
+ assert.equal(events[0].blobs[5],'203.0.113.9');
+ const admin=await worker.fetch(new Request('https://elitequoteflow.com/admin'),baseEnv);const page=await admin.text();
+ assert.match(page,/id="visitor-ips"/);assert.match(page,/detail=ips/);assert.match(page,/Shown only to a signed-in admin/);assert.doesNotMatch(page,/does not store IP addresses/);
 });
 
 test('site traffic chart is on the owner dashboard and renders 24 hourly buckets for all visitors',async()=>{
@@ -199,6 +229,7 @@ test('landing page shows an honest sample preview, signup CTAs, interactive valu
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/landing-refresh.css',import.meta.url),'utf8');
  assert.match(css,/\.lead-calculator/);assert.match(html,/Send the quote/);assert.match(html,/PRODUCT PREVIEW/);assert.match(html,/id="lead-calc-quotes"/);assert.match(html,/id="lead-calc-amount"/);assert.match(html,/id="lead-calc-result"/);assert.match(html,/id="landing-steps-cta"/);assert.match(html,/id="landing-pricing-cta"/);assert.match(html,/FREE TO START/);assert.match(html,/landing-pricing-grid/);assert.match(html,/Stripe deposits and invoice balance collection/);assert.match(html,/No sample or invented reviews are displayed/);assert.doesNotMatch(html,/Prototype preview/);assert.match(app,/updateLeadEstimate/);assert.match(app,/landing-calc-cta/);assert.match(app,/landing-pricing-cta/);assert.match(app,/Create an account/);
  assert.match(html,/id="customer-review-form"/);assert.match(html,/id="published-customer-reviews"/);assert.match(html,/id="team-panel"/);assert.match(html,/id="referral-panel"/);assert.match(app,/api\/customer-reviews/);assert.match(app,/api\/send-quote-email/);assert.match(app,/api\/invoice-checkout/);assert.match(app,/FREE_OPEN_QUOTE_LIMIT/);assert.match(app,/review\.review_text/);assert.doesNotMatch(app,/review\.customer_email/);
+ assert.match(html,/From the first quote to the customer/);assert.match(html,/Follow up before the quote goes quiet/);assert.match(html,/id="welcome-subtitle"/);assert.match(app,/function updateDeskIntro/);assert.match(app,/check in before a job goes quiet/);
 });
 
 test('dashboard offers distinct monthly and lifetime purchase options',async()=>{
@@ -477,6 +508,28 @@ test('quote email failures include the provider reason',async()=>{
  });
 });
 
+test('Pro customer messages send from the company mailbox and reject free accounts',async()=>{
+ const sent=[];
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,business_name:'Acme Painting',full_name:'Alex Owner'}]);
+  if(target==='https://api.resend.com/emails'){sent.push(JSON.parse(options.body));return Response.json({id:'msg_1'});}
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const denied=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{to:'casey@example.com',subject:'Hello',body:'Checking in.'}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(denied.status,401);
+  const sentMessage=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{to:'Casey@Example.com',subject:'Hello',body:'Checking in on the yard.'},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com'});
+  const body=await sentMessage.json();
+  assert.equal(sentMessage.status,200);assert.equal(body.from,'Acme Painting <acme-painting@elitequoteflow.com>');
+  const empty=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{to:'casey@example.com',subject:'Hello',body:' '},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(empty.status,400);
+ });
+ assert.equal(sent.length,1);assert.equal(sent[0].to[0],'casey@example.com');assert.equal(sent[0].reply_to,'owner@example.com');assert.equal(sent[0].from,'Acme Painting <acme-painting@elitequoteflow.com>');
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ assert.match(html,/id="message-composer"/);assert.match(html,/data-feature-action="message"/);assert.match(app,/api\/send-customer-message/);assert.match(app,/sms:\$\{phone\}/);
+});
+
 test('business sender addresses use the business name and avoid platform mailboxes',async()=>{
  const {businessSender}=await import('./sender-address.js');
  const sender=businessSender({RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com',PUBLIC_APP_URL:'https://elitequoteflow.com'},{businessName:"José's Painting & Co",replyTo:'Owner@Example.com'});
@@ -603,6 +656,30 @@ test('paid monthly Pro subscription activates renewable Pro access',async()=>{
  assert.equal(update.stripe_subscription_status,'active');
 });
 
+test('adaptive pricing lifetime checkout still grants Pro from the US dollar amount',async()=>{
+ const {lifetimeIntegrationCents}=await import('./stripe-webhook.js');
+ assert.equal(lifetimeIntegrationCents({currency:'usd',amount_total:14999,presentment_details:{presentment_amount:24000000,presentment_currency:'ngn'}}),14999);
+ assert.equal(lifetimeIntegrationCents({currency:'eur',amount_total:14000,currency_conversion:{source_currency:'usd',amount_total:14999}}),14999);
+ assert.equal(lifetimeIntegrationCents({currency:'eur',amount_total:14000}),null);
+ const timestamp=Math.floor(Date.now()/1000);
+ const body=JSON.stringify({id:'evt_lifetime_local',type:'checkout.session.completed',livemode:true,data:{object:{id:'cs_lifetime_local',mode:'payment',payment_status:'paid',client_reference_id:'user1',payment_link:'plink_lifetime',amount_total:14999,currency:'usd',customer:'cus_lifetime',presentment_details:{presentment_amount:24000000,presentment_currency:'ngn'}}}});
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(baseEnv.STRIPE_WEBHOOK_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const signatureBytes=await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${timestamp}.${body}`));
+ const signature=`t=${timestamp},v1=${[...new Uint8Array(signatureBytes)].map(byte=>byte.toString(16).padStart(2,'0')).join('')}`;
+ let update;
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.includes('/rest/v1/profiles?id=eq.user1&select=id'))return Response.json([{id:'user1'}]);
+  if(target.includes('/rest/v1/profiles?id=eq.user1')&&options.method==='PATCH'){update=JSON.parse(options.body);return new Response(null,{status:204});}
+  if(target.includes('/rest/v1/profiles?')&&!options.method)return Response.json([{id:'user1',referred_by_code:null,referral_reward_status:'none'}]);
+  assert.fail(`Unexpected upstream request ${target}`);
+ },async()=>{
+  const response=await worker.fetch(new Request('https://app.example/api/stripe-webhook',{method:'POST',body,headers:{'Stripe-Signature':signature}}),baseEnv);
+  assert.equal(response.status,200);
+ });
+ assert.equal(update.stripe_subscription_status,'lifetime');
+});
+
 test('paid customer-selected amount below USD 149.99 does not grant lifetime Pro',async()=>{
  const timestamp=Math.floor(Date.now()/1000);
  const body=JSON.stringify({id:'evt_lifetime_under_minimum',type:'checkout.session.completed',livemode:true,data:{object:{id:'cs_lifetime_under_minimum',mode:'payment',payment_status:'paid',client_reference_id:'user1',payment_link:'plink_lifetime',amount_total:100,currency:'usd',customer:'cus_lifetime'}}});
@@ -652,4 +729,52 @@ test('wrangler defines daily production cron and prevents staging cron jobs',asy
  assert.match(growth,/create table if not exists public\.quote_bookings/);assert.match(growth,/create table if not exists public\.recurring_service_plans/);assert.match(growth,/create table if not exists public\.customer_notes/);assert.match(growth,/request_quote_booking/);
  assert.match(config,/binding = "SITE_ANALYTICS"/);assert.match(config,/dataset = "site_analytics"/);assert.match(config,/crons\s*=\s*\["0 9 \* \* \*"\]/);
  assert.match(config,/DISABLE_SCHEDULED_JOBS\s*=\s*"true"/);
+});
+
+test('a used confirmation link is treated as a verified email instead of an error', async () => {
+ const { readFileSync } = await import('node:fs');
+ const vm = await import('node:vm');
+ const context = { URL, URLSearchParams };
+ vm.createContext(context);
+ vm.runInContext(readFileSync(new URL('../public/auth-callback.js', import.meta.url), 'utf8'), context);
+ const auth = context.EliteQuoteFlowAuth;
+ const used = auth.read('https://elitequoteflow.com/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+ assert.equal(used.consumed, true);
+ assert.equal(auth.cleanError('https://elitequoteflow.com/#error=access_denied&error_code=otp_expired&type=signup'), '/#type=signup');
+ const fresh = auth.read('https://elitequoteflow.com/?token_hash=abc123XYZ_-token&type=signup');
+ assert.equal(fresh.consumed, false);
+ assert.equal(fresh.type, 'signup');
+ assert.equal(fresh.tokenHash, 'abc123XYZ_-token');
+ assert.equal(auth.consumedText('both auth code and code verifier should be non-empty'), true);
+ assert.equal(auth.consumedText('Failed to fetch'), false);
+});
+
+test('signup and Google confirmation mail names Elite Quote Flow and stays on this site', async () => {
+ const { authMessage } = await import('./auth-email.js');
+ const message = authMessage(
+  { RESEND_FROM_EMAIL: 'quotes@admin.elitequoteflow.com', PUBLIC_APP_URL: 'https://elitequoteflow.com' },
+  new Request('https://elitequoteflow.com/api/auth-email'),
+  { user: { email: 'Owner@Example.com' }, email_data: { email_action_type: 'signup', token_hash: 'hashed-token_value' } }
+ );
+ assert.equal(message.from, 'Elite Quote Flow <welcome@elitequoteflow.com>');
+ assert.equal(message.subject, 'Confirm your Elite Quote Flow account');
+ assert.match(message.text, /https:\/\/elitequoteflow\.com\/\?token_hash=hashed-token_value&type=signup/);
+ assert.doesNotMatch(message.text, /supabase\.co/);
+ const secret = Buffer.from('hook-secret-value').toString('base64');
+ const body = JSON.stringify({ user: { email: 'owner@example.com' }, email_data: { email_action_type: 'magiclink', token_hash: 'hashed-token_value' } });
+ const id = 'msg_123';
+ const timestamp = String(Math.floor(Date.now() / 1000));
+ const key = await crypto.subtle.importKey('raw', Buffer.from(secret, 'base64'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+ const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${id}.${timestamp}.${body}`));
+ const signature = `v1,${Buffer.from(mac).toString('base64')}`;
+ let sent;
+ await withMockedFetch(async (_url, options) => { sent = JSON.parse(options.body); return Response.json({ id: 'email_1' }); }, async () => {
+  const denied = await worker.fetch(new Request('https://elitequoteflow.com/api/auth-email', { method: 'POST', body }), { ...baseEnv, RESEND_API_KEY: 'resend', RESEND_FROM_EMAIL: 'quotes@admin.elitequoteflow.com', PUBLIC_APP_URL: 'https://elitequoteflow.com', SEND_EMAIL_HOOK_SECRET: secret });
+  assert.equal(denied.status, 401);
+  const accepted = await worker.fetch(new Request('https://elitequoteflow.com/api/auth-email', { method: 'POST', body, headers: { 'webhook-id': id, 'webhook-timestamp': timestamp, 'webhook-signature': signature } }), { ...baseEnv, RESEND_API_KEY: 'resend', RESEND_FROM_EMAIL: 'quotes@admin.elitequoteflow.com', PUBLIC_APP_URL: 'https://elitequoteflow.com', SEND_EMAIL_HOOK_SECRET: `v1,whsec_${secret}` });
+  assert.equal(accepted.status, 200);
+ });
+ assert.equal(sent.from, 'Elite Quote Flow <welcome@elitequoteflow.com>');
+ assert.equal(sent.subject, 'Sign in to Elite Quote Flow');
+ assert.doesNotMatch(sent.text, /supabase\.co/);
 });
