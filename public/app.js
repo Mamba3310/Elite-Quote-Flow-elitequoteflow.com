@@ -233,7 +233,7 @@
     es: { name: 'Lucía', image: 'assistant-lucia.webp', ask: 'Preguntar a Lucía', greet: 'Hola, soy Lucía. Esto es lo que puedo hacer:', nudge: 'Soy Lucía. Puedo guiarle.' },
     pt: { name: 'Beatriz', image: 'assistant-beatriz.webp', ask: 'Falar com a Beatriz', greet: 'Olá, eu sou a Beatriz. Veja o que posso fazer:', nudge: 'Eu sou a Beatriz. Posso orientar você.' },
     zh: { name: 'Mei', image: 'assistant-mei.webp', ask: '询问 Mei', greet: '你好，我是 Mei。我可以做这些：', nudge: '我是 Mei。我可以带你了解。' },
-    yo: { name: 'Sunmisola', image: 'assistant-sunmisola.webp', ask: 'Bèèrè lọ́wọ́ Sunmisola', greet: 'Báwo, èmi ni Sunmisola. Èyí ni ohun tí mo lè ṣe:', nudge: 'Èmi ni Sunmisola. Mo lè ṣe àfihàn rẹ̀ fún ọ.' }
+    yo: { name: 'Sinmisola', image: 'assistant-sinmisola.webp', ask: 'Bèèrè lọ́wọ́ Sinmisola', greet: 'Báwo, èmi ni Sinmisola. Èyí ni ohun tí mo lè ṣe:', nudge: 'Èmi ni Sinmisola. Mo lè ṣe àfihàn rẹ̀ fún ọ.' }
   };
   function applyAssistant() {
     const code = (document.documentElement.lang || 'en').slice(0, 2);

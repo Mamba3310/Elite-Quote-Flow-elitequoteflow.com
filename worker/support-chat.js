@@ -3,7 +3,7 @@ const MAX_HISTORY = 12;
 const DEFAULT_AI_MODEL = '@cf/openai/gpt-oss-20b';
 const AI_MODEL_FALLBACK = '@cf/ibm-granite/granite-4.0-h-micro';
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
-const ASSISTANTS = { en: 'Stacey', fr: 'Camille', es: 'Lucía', pt: 'Beatriz', zh: 'Mei', yo: 'Sunmisola' };
+const ASSISTANTS = { en: 'Stacey', fr: 'Camille', es: 'Lucía', pt: 'Beatriz', zh: 'Mei', yo: 'Sinmisola' };
 function assistantName(language) {
   const code = String(language || 'en').toLowerCase().slice(0, 2);
   return ASSISTANTS[code] || ASSISTANTS.en;
