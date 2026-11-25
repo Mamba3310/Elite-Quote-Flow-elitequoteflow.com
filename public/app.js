@@ -2284,8 +2284,29 @@
       }
     } catch { /* ignore until tables exist */ }
   };
+  function applyLandingEntryIntent() {
+    if (currentUser) return;
+    const params = new URLSearchParams(window.location.search);
+    const start = params.get('start') || params.get('signup');
+    const signin = params.get('signin');
+    let changed = false;
+    if (start === '1' || start === 'true') {
+      showRegistration();
+      params.delete('start');
+      params.delete('signup');
+      changed = true;
+    } else if (signin === '1' || signin === 'true') {
+      showSignedOut('signin');
+      params.delete('signin');
+      changed = true;
+    }
+    if (!changed) return;
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', nextUrl);
+  }
   showLanding();
-  startApplication();
+  void startApplication().then(() => applyLandingEntryIntent());
   const watchAuthForReferral = setInterval(() => {
     if (currentUser) {
       applyStoredReferral();

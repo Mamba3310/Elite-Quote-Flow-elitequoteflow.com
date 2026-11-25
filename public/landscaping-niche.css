@@ -1,0 +1,27 @@
+/* Landscaper niche landing — extends landing-refresh patterns */
+.niche-landscaping .landing-screen{
+  background:
+    radial-gradient(ellipse at 78% 18%,#2a4a3555 0,transparent 36%),
+    radial-gradient(ellipse at 12% 72%,#22396844 0,transparent 34%),
+    #090c12;
+}
+.niche-landscaping .landing-copy>.eyebrow{color:#9ec9ad}
+.niche-landscaping .landing-copy h1 span,
+.niche-preview .preview-next{color:#b7d8bd}
+.niche-preview{
+  background:linear-gradient(145deg,#16231c,#10141c 82%);
+  border-color:#3a5344;
+  box-shadow:0 32px 85px #0008,0 0 60px #3f7a5518;
+}
+.niche-preview::before{background:linear-gradient(135deg,#7fb89230,transparent 45%)}
+.niche-preview .preview-live{color:#8fd4a6}
+.niche-closing{max-width:900px;margin:0 auto;padding:10px 34px 70px;text-align:center}
+.niche-closing-actions{justify-content:center;margin-top:8px}
+.niche-landscaping .landing-nav .button,
+.niche-landscaping .landing-actions .button,
+.niche-landscaping .landing-mid-cta{text-decoration:none}
+.niche-landscaping .landing-nav a.button{display:inline-flex}
+@media(max-width:520px){
+  .niche-closing{padding:8px 20px 52px}
+  .niche-closing-actions{align-items:stretch;flex-direction:column}
+}
