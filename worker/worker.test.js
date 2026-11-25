@@ -100,7 +100,7 @@ test('admin quote status control is owner-protected and records audited updates'
 
 test('sidebar promotes the AI assistant without the redundant growth slogan card',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
- assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.match(html,/class="sidebar-bottom"/);assert.match(html,/class="help-card support-launch"/);assert.doesNotMatch(html,/class="topbar-ask/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.pro-rail\{grid-column:1/);assert.match(css,/320px minmax\(0,1fr\)/);assert.match(css,/\.page-content>\*\{grid-column:2/);assert.match(css,/min-height:calc\(100vh - 108px\)/);
+ assert.match(html,/id="support-launch"/);assert.match(html,/Elite Quote Flow AI/);assert.match(html,/class="sidebar-bottom"/);assert.match(html,/class="help-card support-launch"/);assert.doesNotMatch(html,/class="topbar-ask/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.desk-rail\{grid-column:1/);assert.match(css,/320px minmax\(0,1fr\)/);assert.match(css,/\.page-content>\*\{grid-column:2/);assert.match(css,/min-height:calc\(100vh - 118px\)/);assert.match(html,/class="free-rail"/);assert.match(html,/id="import-estimate-button"/);assert.match(html,/id="invite-button"/);assert.match(html,/Included on every account/);assert.doesNotMatch(html,/class="breadcrumb"/);assert.match(html,/class="workspace-label"/);assert.match(app,/CURRENCIES\.includes\(calculatorCurrency\)/);
  assert.match(app,/Email verified\. Sign in to open your desk\./);assert.match(app,/verifyOtp\(\{ token_hash: callback\.tokenHash, type: callback\.type \}\)/);assert.match(app,/function renderAcceptedTotal/);assert.match(app,/renderAcceptedTotal\(\$\('#metric-won'\), wonThisMonth\)/);assert.match(css,/\.metric-value\.is-split/);assert.match(css,/\.metric-currency-line/);
 });
 
@@ -131,8 +131,29 @@ test('Nigerian naira is available for quotes, templates, and calculator pricing'
 test('owner analytics reports aggregate quote views and decisions by country',async()=>{
  const queries=[];const analytics={writeDataPoint(){},query:async sql=>{queries.push(sql);if(sql.includes("INTERVAL '5' MINUTE"))return {data:[{visits:3}]};if(sql.includes('AS hour'))return {data:[{hour:'2025-01-01 10:00:00',visits:5}]};if(sql.includes('AS path'))return {data:[{path:'/',visits:9}]};if(sql.includes('SELECT SUM(double1) AS visits'))return {data:[{visits:18}]};if(sql.includes('AS source'))return {data:[{source:'example.com',visits:7}]};if(sql.includes('blob3 AS country, blob5 AS decision'))return {data:[{country:'CA',decision:'accepted',decisions:2}]};if(sql.includes('AS country'))return {data:[{country:'CA',visits:4},{country:'Unknown',visits:2}]};if(sql.includes('AS views'))return {data:[{views:6}]};return {data:[{decision:'accepted',decisions:2},{decision:'declined',decisions:1}]};}};
  await withMockedFetch(async url=>{assert.ok(String(url).endsWith('/auth/v1/user'));return Response.json({email:'owner@example.com'});},async()=>{
-  const response=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics',{headers:{Authorization:`Bearer ${ownerToken}`}}),{...baseEnv,OWNER_ANALYTICS_EMAILS:'owner@example.com',SITE_ANALYTICS:analytics});assert.equal(response.status,200);const data=await response.json();assert.equal(data.visits24h,18);assert.equal(data.visits5m,3);assert.deepEqual(data.hourly,[{hour:'2025-01-01 10:00:00',visits:5}]);assert.deepEqual(data.pages,[{path:'/',visits:9}]);assert.equal(data.quoteViews24h,6,JSON.stringify(data));assert.deepEqual(data.decisions24h,{accepted:2,declined:1});assert.deepEqual(data.decisionsByCountry,[{country:'CA',decision:'accepted',count:2}]);assert.deepEqual(data.countries,[{name:'CA',visits:4},{name:'Unknown',visits:2}]);
+  const response=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics',{headers:{Authorization:`Bearer ${ownerToken}`}}),{...baseEnv,OWNER_ANALYTICS_EMAILS:'owner@example.com',SITE_ANALYTICS:analytics});assert.equal(response.status,200);const data=await response.json();assert.equal(data.visits24h,18);assert.equal(data.visits5m,3);assert.deepEqual(data.hourly,[{hour:'2025-01-01 10:00:00',visits:5}]);assert.deepEqual(data.pages,[{path:'/',visits:9}]);assert.equal(data.quoteViews24h,6,JSON.stringify(data));assert.deepEqual(data.decisions24h,{accepted:2,declined:1});assert.deepEqual(data.decisionsByCountry,[{country:'CA',decision:'accepted',count:2}]);assert.deepEqual(data.countries,[{name:'CA',visits:4},{name:'Unknown',visits:2}]);assert.equal(data.visitors,undefined);assert.doesNotMatch(JSON.stringify(data),/\d{1,3}(?:\.\d{1,3}){3}/);
  });assert.equal(queries.length,9);assert.ok(queries.every(sql=>sql.includes('INTERVAL')||sql.includes("timestamp > NOW()")));
+});
+
+test('visitor IP addresses are stored and returned only to the admin analytics view',async()=>{
+ const events=[];
+ const env={SITE_ANALYTICS:{writeDataPoint:event=>events.push(event),query:async sql=>sql.includes('blob6 AS ip')?{data:[{ip:'203.0.113.9',country:'NG',path:'/',event:'pageview',visits:2},{ip:'not-an-ip',country:'US',path:'/',event:'pageview',visits:1}]}:{data:[{visits:1},{source:'direct',visits:1},{country:'NG',visits:1},{views:0},{decision:'accepted',decisions:0},{hour:'2025-01-01 10:00:00',visits:1},{path:'/',visits:1}]}},SUPABASE_URL:baseEnv.SUPABASE_URL,SUPABASE_ANON_KEY:baseEnv.SUPABASE_ANON_KEY,OWNER_ANALYTICS_EMAIL:'owner@example.com'};
+ await withMockedFetch(async url=>{if(String(url).endsWith('/auth/v1/user'))return Response.json({email:'owner@example.com'});assert.fail(`Unexpected upstream ${url}`);},async()=>{
+  const recorded=await worker.fetch(jsonRequest('https://elitequoteflow.com/api/analytics',{event:'pageview',path:'/',referrer:'https://search.example/'},'POST',{'CF-Connecting-IP':'203.0.113.9','CF-IPCountry':'NG'}),env);
+  const recordedBody=await recorded.json();assert.equal(recorded.status,202);assert.equal(recordedBody.received,true);assert.equal(recordedBody.ip,undefined);assert.doesNotMatch(JSON.stringify(recordedBody),/203/);
+  const locale=await worker.fetch(new Request('https://elitequoteflow.com/api/visitor-locale',{headers:{'CF-IPCountry':'NG','CF-Connecting-IP':'203.0.113.9'}}),env);
+  const localeBody=await locale.json();assert.equal(locale.status,200);assert.equal(localeBody.currency,'NGN');assert.equal(localeBody.ip,undefined);
+  const hidden=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics',{headers:{Authorization:`Bearer ${ownerToken}`}}),env);
+  assert.equal((await hidden.json()).visitors,undefined);
+  const denied=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics?detail=ips'),env);
+  assert.equal(denied.status,403);
+  const shown=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics?detail=ips',{headers:{Authorization:`Bearer ${ownerToken}`}}),env);
+  const body=await shown.json();
+  assert.equal(shown.status,200);assert.deepEqual(body.visitors,[{ip:'203.0.113.9',country:'NG',path:'/',event:'pageview',visits:2}]);
+ });
+ assert.equal(events[0].blobs[5],'203.0.113.9');
+ const admin=await worker.fetch(new Request('https://elitequoteflow.com/admin'),baseEnv);const page=await admin.text();
+ assert.match(page,/id="visitor-ips"/);assert.match(page,/detail=ips/);assert.match(page,/Shown only to a signed-in admin/);assert.doesNotMatch(page,/does not store IP addresses/);
 });
 
 test('site traffic chart is on the owner dashboard and renders 24 hourly buckets for all visitors',async()=>{
@@ -484,6 +505,28 @@ test('quote email failures include the provider reason',async()=>{
   assert.equal(email.status,502);
   assert.match(body.error,/Invalid from address/);
  });
+});
+
+test('Pro customer messages send from the company mailbox and reject free accounts',async()=>{
+ const sent=[];
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,business_name:'Acme Painting',full_name:'Alex Owner'}]);
+  if(target==='https://api.resend.com/emails'){sent.push(JSON.parse(options.body));return Response.json({id:'msg_1'});}
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const denied=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{to:'casey@example.com',subject:'Hello',body:'Checking in.'}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(denied.status,401);
+  const sentMessage=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{to:'Casey@Example.com',subject:'Hello',body:'Checking in on the yard.'},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com'});
+  const body=await sentMessage.json();
+  assert.equal(sentMessage.status,200);assert.equal(body.from,'Acme Painting <acme-painting@elitequoteflow.com>');
+  const empty=await worker.fetch(jsonRequest('https://app.example/api/send-customer-message',{to:'casey@example.com',subject:'Hello',body:' '},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  assert.equal(empty.status,400);
+ });
+ assert.equal(sent.length,1);assert.equal(sent[0].to[0],'casey@example.com');assert.equal(sent[0].reply_to,'owner@example.com');assert.equal(sent[0].from,'Acme Painting <acme-painting@elitequoteflow.com>');
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ assert.match(html,/id="message-composer"/);assert.match(html,/data-feature-action="message"/);assert.match(app,/api\/send-customer-message/);assert.match(app,/sms:\$\{phone\}/);
 });
 
 test('business sender addresses use the business name and avoid platform mailboxes',async()=>{

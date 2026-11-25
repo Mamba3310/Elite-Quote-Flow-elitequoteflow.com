@@ -65,12 +65,12 @@ export async function onPublicQuoteRequest(request, env, token) {
       if (String(payload.name || '').length > 120 || String(payload.email || '').length > 254 || String(payload.reason || '').length > 1000 || String(payload.signature || '').length > 30000) return json({ error: 'Response details are too long.' }, 400);
       const result = await rpc(env, 'respond_to_public_quote', { p_token: token, p_action: action, p_name: payload.name || '', p_email: payload.email || '', p_signature: payload.signature || '', p_reason: payload.reason || '' });
       if (!result?.received) return json({ error: 'This quote is unavailable, expired, or already answered.' }, 409);
-      recordAnalytics(env, { path: '/q/:quote', referrer: request.headers.get('Referer') || '', country: request.cf?.country, event: 'quote_decision', decision: action === 'accept' ? 'accepted' : 'declined' });
+      recordAnalytics(env, { path: '/q/:quote', referrer: request.headers.get('Referer') || '', country: request.cf?.country, event: 'quote_decision', decision: action === 'accept' ? 'accepted' : 'declined', ip: request.headers.get('CF-Connecting-IP') });
       return json(result);
     }
     const quote = await rpc(env, 'get_public_quote_by_token', { p_token: token });
     if (!quote) return notFound();
-    recordAnalytics(env, { path: '/q/:quote', referrer: request.headers.get('Referer') || '', country: request.cf?.country, event: 'quote_view' });
+    recordAnalytics(env, { path: '/q/:quote', referrer: request.headers.get('Referer') || '', country: request.cf?.country, event: 'quote_view', ip: request.headers.get('CF-Connecting-IP') });
     return new Response(renderQuote(quote), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'", 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' } });
   } catch (error) {
     console.error('Public quote request failed', error.message);

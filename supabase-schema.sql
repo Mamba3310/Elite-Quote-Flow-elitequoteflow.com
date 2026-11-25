@@ -127,6 +127,7 @@ create table if not exists public.profiles (
   company_logo_url text,
   brand_color text not null default '#426DDE',
   company_address text not null default '',
+  default_currency text not null default 'USD',
   tax_id text not null default '',
   referral_credits_months integer not null default 0,
   referral_reward_status text not null default 'none',
@@ -144,11 +145,14 @@ alter table public.profiles
   add column if not exists brand_color text not null default '#426DDE',
   add column if not exists company_address text not null default '',
   add column if not exists tax_id text not null default '',
+  add column if not exists default_currency text not null default 'USD',
   add column if not exists referral_credits_months integer not null default 0,
   add column if not exists referral_reward_status text not null default 'none';
 
 alter table public.profiles drop constraint if exists profiles_brand_color_check;
 alter table public.profiles add constraint profiles_brand_color_check check (brand_color ~ '^#[0-9A-Fa-f]{6}$');
+alter table public.profiles drop constraint if exists profiles_default_currency_check;
+alter table public.profiles add constraint profiles_default_currency_check check (default_currency in ('USD','EUR','GBP','NGN','CAD','AUD','NZD','CHF','JPY','CNY','INR','MXN','BRL','ZAR','SGD','HKD','SEK','NOK','DKK','PLN'));
 alter table public.profiles drop constraint if exists profiles_referral_credits_check;
 alter table public.profiles add constraint profiles_referral_credits_check check (referral_credits_months >= 0);
 alter table public.profiles drop constraint if exists profiles_referral_reward_status_check;
@@ -229,12 +233,15 @@ language plpgsql
 security definer set search_path = ''
 as $$
 begin
-  insert into public.profiles (id, full_name, business_name, phone)
+  insert into public.profiles (id, full_name, business_name, phone, company_address, default_currency)
   values (
     new.id,
     left(coalesce(new.raw_user_meta_data ->> 'full_name', ''), 80),
     left(coalesce(new.raw_user_meta_data ->> 'business_name', ''), 100),
-    left(coalesce(new.raw_user_meta_data ->> 'phone', ''), 30)
+    left(coalesce(new.raw_user_meta_data ->> 'phone', ''), 30),
+    left(coalesce(new.raw_user_meta_data ->> 'company_address', ''), 300),
+    case when coalesce(new.raw_user_meta_data ->> 'default_currency', 'USD') in ('USD','EUR','GBP','NGN','CAD','AUD','NZD','CHF','JPY','CNY','INR','MXN','BRL','ZAR','SGD','HKD','SEK','NOK','DKK','PLN')
+      then coalesce(new.raw_user_meta_data ->> 'default_currency', 'USD') else 'USD' end
   );
   return new;
 end;
@@ -324,6 +331,7 @@ alter table public.profiles
   add column if not exists company_logo_url text,
   add column if not exists brand_color text not null default '#426DDE',
   add column if not exists company_address text not null default '',
+  add column if not exists default_currency text not null default 'USD',
   add column if not exists referral_credits_months integer not null default 0,
   add column if not exists referral_reward_status text not null default 'none';
 
@@ -337,6 +345,8 @@ alter table public.quote_templates drop constraint if exists quote_templates_pri
 alter table public.quote_templates add constraint quote_templates_pricing_ranges_check check (tax_rate between 0 and 100 and discount_amount >= 0 and deposit_percent between 0 and 100);
 alter table public.profiles drop constraint if exists profiles_brand_color_check;
 alter table public.profiles add constraint profiles_brand_color_check check (brand_color ~ '^#[0-9A-Fa-f]{6}$');
+alter table public.profiles drop constraint if exists profiles_default_currency_check;
+alter table public.profiles add constraint profiles_default_currency_check check (default_currency in ('USD','EUR','GBP','NGN','CAD','AUD','NZD','CHF','JPY','CNY','INR','MXN','BRL','ZAR','SGD','HKD','SEK','NOK','DKK','PLN'));
 alter table public.profiles drop constraint if exists profiles_referral_credits_check;
 alter table public.profiles add constraint profiles_referral_credits_check check (referral_credits_months >= 0);
 alter table public.profiles drop constraint if exists profiles_referral_reward_status_check;
