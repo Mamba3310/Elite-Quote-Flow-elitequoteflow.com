@@ -60,7 +60,7 @@ Add repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Pull 
 
 - The public quote Worker uses restricted RPC functions with service-role access. Browser keys must not be granted direct execution on these functions.
 - Signature capture stores a data URL in `accepted_signature`; review privacy, retention, and e-signature requirements before commercial use.
-- Free accounts are capped at 15 open quotes and 1 line item; Pro unlocks multi-item quotes, deposits, branded email, automated reminders, invoice balance collection, exports, teams, referrals, and recurring auto-quotes.
+- Free accounts are capped at 5 open quotes and 1 line item; Pro unlocks multi-item quotes, deposits, branded email, automated reminders, invoice balance collection, exports, teams, referrals, and recurring auto-quotes.
 - Run `supabase-pro-value.sql` for referral codes and invoice checkout columns after a verified backup. Team tables come from `supabase-growth-features.sql`.
 - Accounting export is a Pro CSV for QuickBooks/Xero import; there is no live accounting sync.
 - A second hosted Supabase project is not required for a first staging pass, but same-project staging data is not isolated. For stronger staging isolation, use a separate Supabase project later or a local Supabase stack.
