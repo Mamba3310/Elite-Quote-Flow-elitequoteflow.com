@@ -25,6 +25,10 @@ simple = { limit = 3, period = 60 }
 [ai]
 binding = "AI"
 
+[[analytics_engine_datasets]]
+binding = "SITE_ANALYTICS"
+dataset = "site_analytics"
+
 [vars]
 PUBLIC_APP_URL = "https://elitequoteflow.com"
 

@@ -292,7 +292,7 @@ test('public quote renders every line item with calculated totals, branding, pay
 
 test('quote builder supports up to 20 editable items and live subtotals without changing existing quote storage',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');
- assert.match(html,/id="quote-line-items"/);assert.match(html,/id="add-quote-line-item"/);assert.match(html,/id="quote-items-total"/);assert.match(app,/rows\.slice\(0, 20\)/);assert.match(app,/lineItemsContainer\.querySelectorAll\('\.quote-line-item'\)/);assert.match(app,/unit_price: unitPrice, total:/);assert.match(app,/Items subtotal:/);assert.match(app,/remove\.disabled = rows\.length < 2/);assert.match(css,/\.quote-line-item\{/);
+ assert.match(html,/id="quote-line-items"/);assert.match(html,/id="add-quote-line-item"/);assert.match(html,/id="quote-items-total"/);assert.match(html,/inputmode="decimal"><span id="quote-currency-label" aria-live="polite">USD<\/span>/);assert.match(css,/\.currency-input\{display:flex/);assert.doesNotMatch(css,/\.currency-input>span\{position:absolute/);assert.match(app,/rows\.slice\(0, 20\)/);assert.match(app,/lineItemsContainer\.querySelectorAll\('\.quote-line-item'\)/);assert.match(app,/unit_price: unitPrice, total:/);assert.match(app,/Items subtotal:/);assert.match(app,/remove\.disabled = rows\.length < 2/);assert.match(css,/\.quote-line-item\{/);
 });
 
 test('accepted public quote submits booking requests through a token-scoped RPC',async()=>{
@@ -594,6 +594,6 @@ test('wrangler defines daily production cron and prevents staging cron jobs',asy
  const reviews=await readFile(new URL('../supabase-customer-reviews.sql',import.meta.url),'utf8');assert.match(reviews,/status text not null default 'published'/);assert.match(reviews,/get_published_customer_reviews/);assert.match(reviews,/submit_customer_review/);assert.match(reviews,/customer_reviews_email_uidx/);assert.match(reviews,/revoke all on public\.customer_reviews from public, anon, authenticated/);
  const growth=await readFile(new URL('../supabase-growth-features.sql',import.meta.url),'utf8');
  assert.match(growth,/create table if not exists public\.quote_bookings/);assert.match(growth,/create table if not exists public\.recurring_service_plans/);assert.match(growth,/create table if not exists public\.customer_notes/);assert.match(growth,/request_quote_booking/);
- assert.match(config,/crons\s*=\s*\["0 9 \* \* \*"\]/);
+ assert.match(config,/binding = "SITE_ANALYTICS"/);assert.match(config,/dataset = "site_analytics"/);assert.match(config,/crons\s*=\s*\["0 9 \* \* \*"\]/);
  assert.match(config,/DISABLE_SCHEDULED_JOBS\s*=\s*"true"/);
 });
