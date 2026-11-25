@@ -12,7 +12,7 @@ Hey landscapers — quick question.
 
 How do you keep track of yard cleanup / mulch quotes that never get a second follow-up?
 
-I built Elite Quote Flow for that exact mess: one place for open estimates, follow-up dates, and a link homeowners can approve online. You can also import quotes you already sent.
+I built Elite Quote Flow for that exact mess: one place for open estimates, follow-up dates, and a link homeowners can approve online. There is an Import estimate flow for quotes you already sent (PDF or paste).
 
 If you want, I can help you pull in your last few estimates so nothing sits cold this season.
 
