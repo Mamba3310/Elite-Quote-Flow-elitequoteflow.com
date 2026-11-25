@@ -9,6 +9,15 @@ import { creditReferrerOnProActivation } from './referrals.js';
 const supabaseBase = env => env.SUPABASE_URL.trim().replace(/\/$/, '');
 const serviceRoleKey = env => env.SUPABASE_SERVICE_ROLE_KEY.trim();
 
+export function lifetimeIntegrationCents(object) {
+  const conversion = object?.currency_conversion;
+  if (conversion && String(conversion.source_currency || '').toLowerCase() === 'usd' && Number.isInteger(conversion.amount_total)) {
+    return conversion.amount_total;
+  }
+  if (String(object?.currency || '').toLowerCase() === 'usd' && Number.isInteger(object.amount_total)) return object.amount_total;
+  return null;
+}
+
 async function profileExists(env, userId) {
   const base = supabaseBase(env);
   const key = serviceRoleKey(env);
@@ -220,8 +229,9 @@ export async function onRequestPost({ request, env }) {
       if (!env.STRIPE_PRO_LIFETIME_PAYMENT_LINK_ID?.trim() || object.payment_link !== env.STRIPE_PRO_LIFETIME_PAYMENT_LINK_ID.trim()) {
         throw new Error('Paid Checkout did not come from the configured Lifetime Pro Payment Link.');
       }
-      if (object.currency !== 'usd' || !Number.isInteger(object.amount_total)) throw new Error('Lifetime Pro Checkout total is missing or uses an unsupported currency.');
-      if (object.amount_total < 14999) {
+      const usdCents = lifetimeIntegrationCents(object);
+      if (usdCents === null) throw new Error('Lifetime Pro Checkout total is missing or uses an unsupported currency.');
+      if (usdCents < 14999) {
         console.log('Lifetime Pro payment below the USD 149.99 minimum; access not activated.', object.id);
         return json({ received: true });
       }

@@ -304,7 +304,7 @@
       ? 'Pro tools are unlocked so your team can cross-check quotes, email, and the rest of the desk. This is not a paid subscription.'
       : profile.isPro
       ? profile.isLifetime ? 'Your one-time purchase gives you permanent access to all Pro tools.' : 'Your Pro tools are ready. Manage billing or cancel your subscription securely.'
-      : `Free tracks open quote value and recovered wins after a follow-up date. Pro adds automated reminders, deposits, branded email, multi-item quotes, AI drafting, exports, teams, and invoice collection · $14.99/mo or $149.99 lifetime. You have ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes.`;
+      : `Free tracks open quote value and recovered wins after a follow-up date. Pro adds automated reminders, deposits, branded email, multi-item quotes, AI drafting, exports, teams, and invoice collection · $14.99/mo or $149.99 lifetime. Checkout can show a local estimate; the charge stays in US dollars. You have ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes.`;
     const monthlyButton = $('#upgrade-monthly-link');
     const lifetimeButton = $('#upgrade-lifetime-link');
     const manageButton = $('#upgrade-pro-link');
