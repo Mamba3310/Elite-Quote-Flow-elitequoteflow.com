@@ -30,6 +30,15 @@ function productHelpFallback(messages, mode) {
   if (/account|sign.?in|password|login/.test(question)) return 'Use the Sign in link on the landing page. If you cannot access your account, use “Forgot password?” on the sign-in form. Never send your password or payment details in chat.';
   return 'I can help with creating and sharing quotes, accepting a quote, deposits, follow-ups, templates, exports, Pro plans, teams, and recurring services. Tell me which part you are trying to do. For quote-specific changes or payment issues, contact the business that sent the quote.';
 }
+function modelReply(result) {
+  if (!result) return '';
+  if (typeof result === 'string') return result.trim();
+  if (typeof result.response === 'string' && result.response.trim()) return result.response.trim();
+  const content = result.choices?.[0]?.message?.content;
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) return content.map(part => typeof part === 'string' ? part : (part?.text || '')).join('').trim();
+  return '';
+}
 async function askModel(env, messages) {
   if (env.AI?.run) {
     const configuredModel = String(env.SUPPORT_AI_MODEL || DEFAULT_AI_MODEL).trim();
@@ -38,7 +47,7 @@ async function askModel(env, messages) {
     for (const model of models) {
       try {
         const result = await env.AI.run(model, { messages, max_tokens: 400 });
-        const reply = result?.response?.trim();
+        const reply = modelReply(result);
         if (reply) return reply;
         lastError = new Error(`Workers AI returned an empty result from ${model}.`);
       } catch (error) {

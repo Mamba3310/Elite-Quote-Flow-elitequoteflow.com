@@ -229,6 +229,13 @@ test('AI provider failures fall back to relevant always-available product guidan
  assert.equal(response.status,200);const body=await response.json();assert.equal(body.mode,'help-fallback');assert.match(body.reply,/draw your signature/i);
 });
 
+test('AI quote drafting reads Workers AI chat-completion text', async () => {
+ const AI={run:async()=>({choices:[{message:{content:'Replace the faucet, supply the cartridge, and test for leaks.'}}]})};
+ const response=await worker.fetch(jsonRequest('https://app.example/api/support-chat',{mode:'draft',messages:[{role:'user',content:'Replace faucet'}]}),{AI});
+ const result=await response.json();
+ assert.equal(response.status,200);assert.equal(result.mode,'ai');assert.equal(result.reply,'Replace the faucet, supply the cartridge, and test for leaks.');
+});
+
 test('AI quote drafting uses the current default model, scope prompt, and returns draft copy', async () => {
  let requestMessages,requestedModel;
  const AI={run:async(model,payload)=>{requestedModel=model;requestMessages=payload.messages;return {response:'Replace the kitchen faucet and test for leaks.'};}};
