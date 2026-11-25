@@ -63,8 +63,9 @@ export async function onSendQuoteEmail(request, env) {
   });
   const result = await readJson(resend);
   if (!resend.ok) {
-    console.error('Resend quote email failed', resend.status, result?.message || result?.error || 'unknown');
-    return json({ error: 'Could not send the quote email. Try again or use your email app.' }, 502);
+    const detail = String(result?.message || result?.error || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+    console.error('Resend quote email failed', resend.status, detail || 'unknown');
+    return json({ error: detail ? `Could not send the quote email. ${detail}` : 'Could not send the quote email. Try again or use your email app.' }, 502);
   }
   return json({ sent: true, id: result?.id || null, link, from: sender.from });
 }

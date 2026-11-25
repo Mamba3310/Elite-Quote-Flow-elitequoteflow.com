@@ -438,6 +438,35 @@ test('invoice checkout and send-quote-email require Pro and create Stripe or Res
  assert.equal(sentFrom,'Acme <acme@example.com>');
 });
 
+test('notices stay in the top layer and quote send failures stay on screen',async()=>{
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
+ const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');
+ assert.match(html,/id="toast"[^>]*popover="manual"/);
+ assert.match(app,/toast\.showPopover\(\)/);
+ assert.match(app,/Open email app/);
+ assert.doesNotMatch(app,/Opening your email app instead/);
+ assert.match(css,/\.toast\{[^}]*top:16px/);
+ assert.match(css,/\.field-error\{[^}]*font:600 13px/);
+});
+
+test('quote email failures include the provider reason',async()=>{
+ const id='550e8400-e29b-41d4-a716-446655440000';
+ await withMockedFetch(async url=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,business_name:'Acme',full_name:'Alex Owner'}]);
+  if(target.includes('/rest/v1/quotes?'))return Response.json([{id,customer:'Casey',email:'casey@example.com',service:'Repair',amount:200,currency:'USD',public_token:id}]);
+  if(target==='https://api.resend.com/emails')return Response.json({message:'Invalid from address.'},{status:422});
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const email=await worker.fetch(jsonRequest('https://app.example/api/send-quote-email',{quoteId:id},'POST',{Authorization:`Bearer ${ownerToken}`}),{...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com'});
+  const body=await email.json();
+  assert.equal(email.status,502);
+  assert.match(body.error,/Invalid from address/);
+ });
+});
+
 test('business sender addresses use the business name and avoid platform mailboxes',async()=>{
  const {businessSender}=await import('./sender-address.js');
  const sender=businessSender({RESEND_FROM_EMAIL:'quotes@admin.elitequoteflow.com',PUBLIC_APP_URL:'https://elitequoteflow.com'},{businessName:"José's Painting & Co",replyTo:'Owner@Example.com'});

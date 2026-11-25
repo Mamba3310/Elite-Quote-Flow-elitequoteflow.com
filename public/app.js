@@ -1113,13 +1113,38 @@
     $('#table-summary').textContent = `Showing ${visible.length} of ${quotes.length} quote${quotes.length === 1 ? '' : 's'}`;
   }
 
-  function showToast(message, duration = 2800) {
+  function hideToast() {
     const toast = $('#toast');
     if (!toast) return;
-    toast.textContent = message;
+    toast.classList.remove('is-visible');
+    if (typeof toast.hidePopover === 'function' && toast.matches(':popover-open')) toast.hidePopover();
+  }
+
+  function showToast(message, duration = 2800, options = {}) {
+    const toast = $('#toast');
+    if (!toast) return;
+    const error = options.error === true || /could not|was not|failed|unavailable|not saved|not deleted|not configured|invalid|try again/i.test(String(message || ''));
+    const text = document.createElement('p');
+    text.textContent = message;
+    toast.replaceChildren(text);
+    if (options.action?.label && typeof options.action.onClick === 'function') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'button button-primary button-small toast-action';
+      button.textContent = options.action.label;
+      button.addEventListener('click', () => {
+        hideToast();
+        options.action.onClick();
+      });
+      toast.append(button);
+    }
+    toast.classList.toggle('is-error', error);
     toast.classList.add('is-visible');
+    if (typeof toast.showPopover === 'function') {
+      try { if (!toast.matches(':popover-open')) toast.showPopover(); } catch { /* The notice is already in the top layer. */ }
+    }
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove('is-visible'), duration);
+    toastTimer = setTimeout(hideToast, error ? Math.max(duration, 8000) : duration);
   }
 
   function renderLineItemFields(items = []) {
@@ -1721,7 +1746,11 @@
       if (message && !firstInvalid) firstInvalid = input;
     });
     if (firstInvalid) {
+      const field = firstInvalid.closest('.form-field');
+      field?.scrollIntoView({ block: 'center' });
       firstInvalid.focus();
+      const firstMessage = Object.values(errors).find(Boolean);
+      if (firstMessage) showToast(firstMessage, 6000, { error: true });
       return;
     }
     const wasEditing = Boolean(editingId);
@@ -1836,7 +1865,12 @@
           showToast(result.from ? `Quote email sent as ${result.from}.` : 'Quote email sent from your business name.');
           return;
         } catch (error) {
-          showToast(`${error.message} Opening your email app instead…`, 5000);
+          const mailto = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+          showToast(error.message || 'Could not send the quote email.', 9000, {
+            error: true,
+            action: { label: 'Open email app', onClick: () => { window.location.href = mailto; } }
+          });
+          return;
         }
       }
       window.location.href = `mailto:${encodeURIComponent(quote.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
