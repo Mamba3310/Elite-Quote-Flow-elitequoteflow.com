@@ -104,6 +104,12 @@ test('sidebar promotes the AI assistant without the redundant growth slogan card
  assert.match(app,/Email verified\. Sign in to open your desk\./);assert.match(app,/verifyOtp\(\{ token_hash: callback\.tokenHash, type: callback\.type \}\)/);assert.match(app,/function renderAcceptedTotal/);assert.match(app,/renderAcceptedTotal\(\$\('#metric-won'\), wonThisMonth\)/);assert.match(css,/\.metric-value\.is-split/);assert.match(css,/\.metric-currency-line/);
 });
 
+test('company logo is uploaded from the computer instead of a web link',async()=>{
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+ assert.match(html,/id="company-logo-file" type="file"/);assert.match(html,/id="company-logo-preview"/);assert.doesNotMatch(html,/Company logo URL/);assert.doesNotMatch(html,/name="companyLogoUrl" type="url"/);
+ assert.match(app,/function readLogoFile/);assert.match(app,/toDataURL/);assert.match(app,/startsWith\('data:'\)/);
+});
+
 test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');
  for (const label of ['Overview','Quotes','Follow-ups','Calendar','Calculator','Templates','Import estimate','Customer history','Invoices','Appointments']) assert.match(html,new RegExp(`>${label}(?: <span|</button>)`));
