@@ -4,7 +4,7 @@
   const STORAGE_KEY = 'quoteflow.quotes.v1';
   const CALCULATOR_CURRENCY_KEY = 'calculator-currency';
   const VISITOR_CURRENCY_KEY = 'quoteflow.visitor-currency';
-  const FREE_OPEN_QUOTE_LIMIT = 15;
+  const FREE_OPEN_QUOTE_LIMIT = 2;
   const FREE_LINE_ITEM_LIMIT = 1;
   const PRO_LINE_ITEM_LIMIT = 20;
   const SUPABASE_CONFIG = window.QUOTEFlow_SUPABASE_CONFIG;
@@ -303,7 +303,7 @@
 
   function renderProfile() {
     const name = formatDisplayName(profile.fullName || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0]) || 'Your profile';
-    const avatar = name.trim().split(/\\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() || 'Q';
+    const avatar = name.trim().split(/\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() || 'Q';
     $('#upgrade-strip').classList.toggle('is-pro-active', Boolean(profile.isPro));
     const eyebrow = document.querySelector('#upgrade-strip .eyebrow');
     if (eyebrow) eyebrow.textContent = profile.isStaff ? 'STAFF REVIEW' : 'ELITE QUOTE FLOW PRO';
@@ -343,7 +343,7 @@
     const freeLimitNote = $('#free-limit-note');
     if (freeLimitNote) {
       freeLimitNote.hidden = Boolean(profile.isPro);
-      freeLimitNote.textContent = `Free plan: ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes · 1 line item · mailto send. Upgrade for deposits, reminders, branding, and more.`;
+      freeLimitNote.textContent = `Free access is limited to ${FREE_OPEN_QUOTE_LIMIT} quotes. You have ${openCount} of ${FREE_OPEN_QUOTE_LIMIT}. Upgrade for deposits, reminders, branding, and more.`;
     }
     $('#header-profile-name').textContent = name;
     $('#header-profile-name').title = name;
@@ -439,6 +439,44 @@
     const { data: { session } } = await supabaseClient.auth.getSession();
     return { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` };
   }
+
+  function attachAddressSuggestions(input) {
+    if (!input) return;
+    const field = input.closest('.form-field') || input.parentElement;
+    const list = document.createElement('div');
+    list.className = 'address-suggestions';
+    list.hidden = true;
+    list.setAttribute('role', 'listbox');
+    field.append(list);
+    let timer = 0;
+    const close = () => { list.hidden = true; list.replaceChildren(); };
+    input.addEventListener('input', () => {
+      window.clearTimeout(timer);
+      const query = input.value.trim();
+      if (query.length < 3) { close(); return; }
+      timer = window.setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/address-suggest?q=${encodeURIComponent(query)}`);
+          const payload = await response.json();
+          const suggestions = Array.isArray(payload.suggestions) ? payload.suggestions : [];
+          if (!suggestions.length || input.value.trim() !== query) { close(); return; }
+          list.replaceChildren(...suggestions.map(label => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.setAttribute('role', 'option');
+            button.textContent = label;
+            button.addEventListener('mousedown', event => event.preventDefault());
+            button.addEventListener('click', () => { input.value = label; close(); });
+            return button;
+          }));
+          list.hidden = false;
+        } catch { close(); }
+      }, 280);
+    });
+    input.addEventListener('blur', () => window.setTimeout(close, 160));
+  }
+
+  attachAddressSuggestions(profileForm.elements.companyAddress);
 
   async function loadGrowthExtras() {
     if (!currentUser) return;
@@ -1114,6 +1152,22 @@
     showAuthError('Email verified. Sign in to open your desk.', 'success');
   }
 
+  let networkLimitMessage = '';
+
+  async function claimNetworkAccount() {
+    if (!currentUser) return true;
+    try {
+      const response = await fetch('/api/account-slot', { method: 'POST', headers: await authHeaders() });
+      if (response.status !== 403) return true;
+      const payload = await response.json().catch(() => ({}));
+      networkLimitMessage = payload.error || 'This network already has two free accounts. Sign in to an existing account.';
+      await supabaseClient.auth.signOut();
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
   async function startApplication() {
     if (!window.supabase || !SUPABASE_CONFIG?.url || !SUPABASE_CONFIG?.anonKey) {
       showLanding();
@@ -1145,6 +1199,7 @@
         showSignedIn();
         if (!callback.consumed && ['signup', 'email', 'magiclink', 'invite'].includes(callback.type)) showToast('Email verified. Welcome to Elite Quote Flow.');
         await fetchProfile();
+        if (!(await claimNetworkAccount())) return;
         await loadCalculatorPreferences(currentUser.id);
         await initializeOwnerAnalytics();
         await refreshQuotes();
@@ -1182,13 +1237,18 @@
         render();
         $('#header-profile-name').textContent = 'Your profile';
         $('#header-profile-avatar').textContent = 'Q';
-        if (keepVerifiedSignIn) showVerifiedSignIn();
+        if (networkLimitMessage) {
+          showSignedOut('signin');
+          showAuthError(networkLimitMessage);
+          networkLimitMessage = '';
+        } else if (keepVerifiedSignIn) showVerifiedSignIn();
         else showLanding();
       } else if (nextUser.id !== previousId) {
         showSignedIn();
         window.setTimeout(async () => {
           if (currentUser?.id !== nextUser.id) return;
           await fetchProfile();
+          if (!(await claimNetworkAccount())) return;
           await loadCalculatorPreferences(nextUser.id);
           await initializeOwnerAnalytics();
           await refreshQuotes();
@@ -2424,6 +2484,8 @@
     button.disabled = true;
     button.textContent = 'Creating account…';
     try {
+      const allowance = await fetch('/api/account-slot').then(response => response.json()).catch(() => ({ allowed: true }));
+      if (allowance.allowed === false) throw new Error(allowance.error || 'This network already has two free accounts. Sign in to an existing account.');
       const { data, error } = await supabaseClient.auth.signUp({
         email: $('#register-email').value.trim(),
         password,
@@ -2470,6 +2532,10 @@
     button.disabled = true;
     button.textContent = 'Connecting to Google…';
     try {
+      if (registerVisible) {
+        const allowance = await fetch('/api/account-slot').then(response => response.json()).catch(() => ({ allowed: true }));
+        if (allowance.allowed === false) throw new Error(allowance.error || 'This network already has two free accounts. Sign in to an existing account.');
+      }
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: `${window.location.origin}/` }

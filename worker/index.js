@@ -17,6 +17,8 @@ import { onCustomerReview } from './customer-reviews.js';
 import { adminPage, onAdminApi } from './admin.js';
 import { onPublicBooking } from './public-booking.js';
 import { onVisitorLocale } from './visitor-locale.js';
+import { onAddressSuggest } from './address-suggest.js';
+import { onAccountSlot } from './account-slot.js';
 
 const json = (body, status = 200) => Response.json(body, {
   status,
@@ -84,6 +86,8 @@ export default {
       return onSendQuoteEmail(request, env);
     }
     if (url.pathname === '/api/auth-email') return onAuthEmail(request, env);
+    if (url.pathname === '/api/address-suggest') return onAddressSuggest(request);
+    if (url.pathname === '/api/account-slot') return onAccountSlot(request, env);
     if (url.pathname === '/api/teams' || url.pathname === '/api/teams/accept') {
       return onTeamsRequest(request, env);
     }
