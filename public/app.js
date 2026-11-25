@@ -194,7 +194,7 @@
     const openCount = openQuoteCount();
     $('#pro-upgrade-copy').textContent = profile.isPro
       ? profile.isLifetime ? 'Your one-time purchase gives you permanent access to all Pro tools.' : 'Your Pro tools are ready. Manage billing or cancel your subscription securely.'
-      : `Free includes ${FREE_OPEN_QUOTE_LIMIT} open quotes and core follow-ups. Pro adds deposits, branded email, reminders, multi-item quotes, AI drafting, exports, teams, and invoice collection · $14.99/mo or $149.99 lifetime. You have ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes.`;
+      : `Free tracks open quote value and recovered wins after a follow-up date. Pro adds automated reminders, deposits, branded email, multi-item quotes, AI drafting, exports, teams, and invoice collection · $14.99/mo or $149.99 lifetime. You have ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes.`;
     const monthlyButton = $('#upgrade-monthly-link');
     const lifetimeButton = $('#upgrade-lifetime-link');
     const manageButton = $('#upgrade-pro-link');
@@ -416,6 +416,8 @@
       followUp: row.follow_up,
       status: row.status,
       note: row.note || '',
+      reminderCount: Number(row.reminder_count || 0),
+      lastReminderAt: row.last_reminder_at || '',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       statusChangedAt: row.status_changed_at,
@@ -681,6 +683,8 @@
       followUp: data.follow_up,
       status: data.status,
       note: data.note || '',
+      reminderCount: Number(data.reminder_count || 0),
+      lastReminderAt: data.last_reminder_at || '',
       createdAt: data.created_at,
       updatedAt: data.updated_at,
       statusChangedAt: data.status_changed_at,
@@ -958,6 +962,26 @@
     return date ? Math.round((date.getTime() - today.getTime()) / 86400000) : Infinity;
   }
 
+  function acceptanceDate(quote) {
+    const raw = quote.acceptedAt || quote.statusChangedAt || '';
+    const parsed = raw ? new Date(raw) : null;
+    if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+    return null;
+  }
+
+  function isRecoveredByFollowUp(quote) {
+    if (quote.status !== 'won') return false;
+    const followUp = asDate(quote.followUp);
+    if (!followUp) return false;
+    const accepted = acceptanceDate(quote);
+    if (!accepted) return false;
+    const acceptedDay = new Date(accepted);
+    acceptedDay.setHours(0, 0, 0, 0);
+    const followUpDue = acceptedDay.getTime() >= followUp.getTime();
+    const hadReminder = Number(quote.reminderCount || 0) > 0 || Boolean(quote.lastReminderAt);
+    return followUpDue || hadReminder;
+  }
+
   function isDue(quote) {
     return quote.status === 'sent' && daysUntil(quote.followUp) <= 0;
   }
@@ -1046,6 +1070,15 @@
     $('#due-caption').textContent = dueQuotes.length ? `${dueQuotes.filter(quote => daysUntil(quote.followUp) < 0).length} overdue · ${dueQuotes.filter(quote => daysUntil(quote.followUp) === 0).length} due today` : 'No follow-ups due today';
     $('#metric-won').textContent = formatTotals(wonThisMonth);
     $('#won-caption').textContent = `${wonThisMonth.length} accepted quote${wonThisMonth.length === 1 ? '' : 's'}`;
+    const recoveredQuotes = quotes.filter(isRecoveredByFollowUp);
+    const recoveredEl = $('#metric-recovered');
+    const recoveredCaption = $('#recovered-caption');
+    if (recoveredEl) recoveredEl.textContent = formatTotals(recoveredQuotes);
+    if (recoveredCaption) {
+      recoveredCaption.textContent = recoveredQuotes.length
+        ? `${recoveredQuotes.length} accepted after follow-up was due${isPro() ? '' : ' · Pro automates reminder emails'}`
+        : 'Accepted after follow-up was due · not a guarantee of results';
+    }
     $('#metric-rate').textContent = `${rate}%`;
     renderPipeline();
     renderCustomerHistory();
@@ -1101,16 +1134,21 @@
     if (target) target.textContent = `Items subtotal: ${formatMoney(subtotal, form.elements.currency.value || 'USD')}`;
   }
 
-  function openDialog(quote = null, presetAmount = null, presetFollowUp = null) {
+  function openDialog(quote = null, presetAmount = null, presetFollowUp = null, importPreset = null) {
     editingId = quote ? quote.id : null;
     form.reset();
-    form.elements.currency.value = quote?.currency || calculatorCurrency || 'USD';
+    form.elements.currency.value = quote?.currency || importPreset?.currency || calculatorCurrency || 'USD';
     renderLineItemFields(quote?.lineItems || []);
     form.querySelectorAll('.form-field').forEach(field => field.classList.remove('has-error'));
     form.querySelectorAll('.field-error').forEach(error => { error.textContent = ''; });
-    $('#dialog-kicker').textContent = quote ? 'UPDATE OPPORTUNITY' : 'A NEW OPPORTUNITY';
-    $('#dialog-title').textContent = quote ? 'Edit quote' : 'Add a quote';
-    $('#dialog-description').textContent = quote ? 'Update the details for this quote.' : 'Capture the details and choose when to check in.';
+    const importing = Boolean(importPreset) && !quote;
+    $('#dialog-kicker').textContent = quote ? 'UPDATE OPPORTUNITY' : importing ? 'IMPORTED ESTIMATE' : 'A NEW OPPORTUNITY';
+    $('#dialog-title').textContent = quote ? 'Edit quote' : importing ? 'Review imported quote' : 'Add a quote';
+    $('#dialog-description').textContent = quote
+      ? 'Update the details for this quote.'
+      : importing
+        ? 'Confirm the extracted fields, then save. Amounts are only filled when clearly labeled in the source.'
+        : 'Capture the details and choose when to check in.';
     $('#quote-template-select').value = '';
     $('#save-quote-button').innerHTML = quote ? 'Save changes <span aria-hidden="true">↗</span>' : 'Save quote <span aria-hidden="true">↗</span>';
     if (quote) {
@@ -1123,11 +1161,26 @@
       form.elements.expiresAt.value = quote.expiresAt || '';
     } else {
       form.elements.followUp.value = asDate(presetFollowUp) ? presetFollowUp : dateOffset(3);
-      form.elements.currency.value = calculatorCurrency;
+      form.elements.currency.value = importPreset?.currency || calculatorCurrency;
       form.elements.taxRate.value = 0;
       form.elements.discountAmount.value = 0;
       form.elements.depositPercent.value = 0;
-      if (presetAmount !== null) form.elements.amount.value = Number(presetAmount).toFixed(2);
+      if (importPreset) {
+        for (const field of ['customer', 'service', 'email', 'phone', 'note']) {
+          if (importPreset[field]) form.elements[field].value = importPreset[field];
+        }
+        if (importPreset.terms) form.elements.terms.value = importPreset.terms;
+        if (importPreset.amount !== undefined && importPreset.amount !== null && importPreset.amount !== '') {
+          form.elements.amount.value = Number(importPreset.amount).toFixed(2);
+        } else if (presetAmount !== null) {
+          form.elements.amount.value = Number(presetAmount).toFixed(2);
+        }
+        if (importPreset.currency && CURRENCIES.includes(importPreset.currency)) {
+          form.elements.currency.value = importPreset.currency;
+        }
+      } else if (presetAmount !== null) {
+        form.elements.amount.value = Number(presetAmount).toFixed(2);
+      }
     }
     $('#quote-currency-label').textContent = form.elements.currency.value;
     form.elements.amount.step = currencyStep(form.elements.currency.value);
@@ -1280,10 +1333,139 @@
     wrapper.querySelector('.field-error').textContent = '';
   }
 
-  [$('#new-quote-button'), $('#new-quote-button-secondary'), $('#empty-add-button')].forEach(button => button.addEventListener('click', openDialog));
+  [$('#new-quote-button'), $('#new-quote-button-secondary'), $('#empty-add-button')].forEach(button => button.addEventListener('click', () => openDialog()));
   document.querySelectorAll('.close-dialog').forEach(button => button.addEventListener('click', closeDialog));
   dialog.addEventListener('click', event => { if (event.target === dialog) closeDialog(); });
   $('#focus-button').addEventListener('click', () => setFilter('follow-up'));
+
+  const importDialog = $('#import-estimate-dialog');
+  const importForm = $('#import-estimate-form');
+  const importStatus = $('#import-estimate-status');
+  const importReview = $('#import-estimate-review');
+  const importContinue = $('#import-estimate-continue');
+  let pendingImport = null;
+
+  function setImportStatus(message, kind = '') {
+    if (!importStatus) return;
+    importStatus.textContent = message || '';
+    importStatus.classList.toggle('is-error', kind === 'error');
+    importStatus.classList.toggle('is-loading', kind === 'loading');
+  }
+
+  function closeImportDialog() {
+    if (!importDialog) return;
+    if (typeof importDialog.close === 'function') importDialog.close();
+    else importDialog.removeAttribute('open');
+  }
+
+  function openImportDialog() {
+    if (!currentUser) return showToast('Sign in to import an estimate.');
+    if (!importDialog || !importForm) return showToast('Import is unavailable right now.');
+    importForm.reset();
+    pendingImport = null;
+    if (importReview) importReview.hidden = true;
+    if (importContinue) importContinue.hidden = true;
+    const currencySelect = $('#import-review-currency');
+    if (currencySelect && !currencySelect.options.length) currencySelect.innerHTML = currencyOptions;
+    if (currencySelect) currencySelect.value = calculatorCurrency || 'USD';
+    setImportStatus('Upload a file or paste text, then extract fields to review.');
+    if (typeof importDialog.showModal === 'function') importDialog.showModal();
+    else importDialog.setAttribute('open', '');
+  }
+
+  function fillImportReview(parsed) {
+    pendingImport = parsed;
+    if (!importReview) return;
+    importReview.hidden = false;
+    if (importContinue) importContinue.hidden = false;
+    $('#import-review-customer').value = parsed.fields.customer || '';
+    $('#import-review-service').value = parsed.fields.service || '';
+    $('#import-review-email').value = parsed.fields.email || '';
+    $('#import-review-phone').value = parsed.fields.phone || '';
+    $('#import-review-amount').value = parsed.fields.amount || '';
+    const currencySelect = $('#import-review-currency');
+    if (currencySelect) {
+      if (!currencySelect.options.length) currencySelect.innerHTML = currencyOptions;
+      currencySelect.value = CURRENCIES.includes(parsed.fields.currency) ? parsed.fields.currency : (calculatorCurrency || 'USD');
+    }
+    $('#import-review-terms').value = parsed.fields.terms || '';
+    const warnings = $('#import-estimate-warnings');
+    if (warnings) warnings.textContent = (parsed.warnings || []).join(' ') || 'Review the fields below, then continue to the quote form.';
+  }
+
+  async function runEstimateImport() {
+    const api = window.QuoteFlowEstimateImport;
+    if (!api) {
+      setImportStatus('Import helper failed to load. Refresh and try again.', 'error');
+      return;
+    }
+    const fileInput = $('#import-estimate-file');
+    const paste = ($('#import-estimate-paste')?.value || '').trim();
+    const file = fileInput?.files?.[0] || null;
+    if (!file && !paste) {
+      setImportStatus('Choose a file or paste estimate text first.', 'error');
+      return;
+    }
+    setImportStatus('Extracting fields…', 'loading');
+    if (importContinue) importContinue.hidden = true;
+    try {
+      let parsed;
+      if (file) parsed = await api.extractFromFile(file);
+      else parsed = api.parseEstimateText(paste, { sourceType: 'paste' });
+      if (paste && file) {
+        const fromPaste = api.parseEstimateText(paste, { sourceType: 'paste', filename: file.name });
+        parsed.fields = {
+          ...parsed.fields,
+          customer: fromPaste.fields.customer || parsed.fields.customer,
+          service: fromPaste.fields.service || parsed.fields.service,
+          email: fromPaste.fields.email || parsed.fields.email,
+          phone: fromPaste.fields.phone || parsed.fields.phone,
+          amount: fromPaste.fields.amount || parsed.fields.amount,
+          currency: fromPaste.fields.currency || parsed.fields.currency,
+          terms: fromPaste.fields.terms || parsed.fields.terms,
+          note: parsed.fields.note || fromPaste.fields.note
+        };
+        parsed.warnings = [...new Set([...(parsed.warnings || []), ...(fromPaste.warnings || [])])];
+      }
+      fillImportReview(parsed);
+      setImportStatus(parsed.extractedText ? 'Fields extracted. Confirm them, then continue.' : 'Ready for review. Confirm or complete the fields before saving.');
+    } catch (error) {
+      pendingImport = null;
+      if (importReview) importReview.hidden = true;
+      setImportStatus(error.message || 'Could not import that estimate.', 'error');
+    }
+  }
+
+  function continueImportedEstimate() {
+    if (!pendingImport) return setImportStatus('Extract fields before continuing.', 'error');
+    const amountValue = $('#import-review-amount')?.value;
+    const preset = {
+      customer: ($('#import-review-customer')?.value || '').trim(),
+      service: ($('#import-review-service')?.value || '').trim(),
+      email: ($('#import-review-email')?.value || '').trim(),
+      phone: ($('#import-review-phone')?.value || '').trim(),
+      amount: amountValue === '' || amountValue === undefined ? '' : amountValue,
+      currency: $('#import-review-currency')?.value || calculatorCurrency || 'USD',
+      terms: ($('#import-review-terms')?.value || '').trim().slice(0, 2000),
+      note: (pendingImport.fields.note || '').slice(0, 240)
+    };
+    closeImportDialog();
+    openDialog(null, null, null, preset);
+    showToast('Review the imported fields, then save the quote.');
+  }
+
+  [$('#import-estimate-button'), $('#import-estimate-button-secondary'), $('#empty-import-button')].forEach(button => {
+    button?.addEventListener('click', openImportDialog);
+  });
+  document.querySelectorAll('.import-estimate-close').forEach(button => button.addEventListener('click', closeImportDialog));
+  importDialog?.addEventListener('click', event => { if (event.target === importDialog) closeImportDialog(); });
+  $('#import-estimate-parse')?.addEventListener('click', event => { event.preventDefault(); runEstimateImport(); });
+  importContinue?.addEventListener('click', event => { event.preventDefault(); continueImportedEstimate(); });
+  importForm?.addEventListener('submit', event => {
+    event.preventDefault();
+    if (importContinue && !importContinue.hidden) continueImportedEstimate();
+    else runEstimateImport();
+  });
   async function startBillingAction(button, endpoint, body) {
     if (!currentUser || !supabaseClient) return showToast('Sign in before managing your plan.');
     const original = button.innerHTML;
