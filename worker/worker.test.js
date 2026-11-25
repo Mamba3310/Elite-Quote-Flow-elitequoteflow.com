@@ -370,7 +370,7 @@ test('scheduled job expires quotes, emails Pro owners only, and persists reminde
   const target=String(url);
   if(target.includes('/rest/v1/quotes?status=')){if(new URL(target).searchParams.get('offset')!=='0')return Response.json([]);return Response.json([{id:'expired',user_id:'user1',email:'',expires_at:'2020-01-01',follow_up:'2020-01-01',reminder_count:0},{id:'due',user_id:'user1',email:'x@example.com',customer:'Alex',service:'Repair',expires_at:'2026-01-01',follow_up:'2024-12-31',reminder_count:0,public_token:'token'}]);}
   if(target.includes('/rest/v1/profiles?')&&target.includes('is_pro=eq.true'))return Response.json([{id:'user1'}]);
-  if(target.includes('/rest/v1/profiles?')&&target.includes('select=id,business_name'))return Response.json([{id:'user1',business_name:'Acme Pros'}]);
+  if(target.includes('/rest/v1/profiles?')&&target.includes('select=id,business_name,full_name,phone'))return Response.json([{id:'user1',business_name:'Acme Pros',full_name:'Alex Owner',phone:'555-0100'}]);
   if(target.includes('/rest/v1/recurring_service_plans?'))return Response.json([]);
   if(target.includes('/auth/v1/admin/users/'))return Response.json({id:'user1',email:'owner@example.com'});
   if(target==='https://api.resend.com/emails'){emailSent=true;const body=JSON.parse(options.body);assert.equal(body.from,'Acme Pros <acme-pros@example.com>');assert.equal(body.reply_to,'owner@example.com');return Response.json({id:'email'});}
@@ -389,10 +389,10 @@ test('follow-up automation uses staged gentle messages after due date',async()=>
   const target=String(url);
   if(target.includes('/rest/v1/quotes?status='))return Response.json([{id:'q1',user_id:'user1',email:'x@example.com',customer:'Alex',service:'Repair',public_token:'token',follow_up:'2025-01-01',reminder_count:1,last_reminder_at:'2025-01-02T09:00:00Z'}]);
   if(target.includes('/rest/v1/profiles?')&&target.includes('is_pro=eq.true'))return Response.json([{id:'user1'}]);
-  if(target.includes('/rest/v1/profiles?')&&target.includes('select=id,business_name'))return Response.json([{id:'user1',business_name:'Acme'}]);
+  if(target.includes('/rest/v1/profiles?')&&target.includes('select=id,business_name,full_name,phone'))return Response.json([{id:'user1',business_name:'Acme',full_name:'Alex Owner',phone:'555-0100'}]);
   if(target.includes('/rest/v1/recurring_service_plans?'))return Response.json([]);
   if(target.includes('/auth/v1/admin/users/'))return Response.json({id:'user1',email:'owner@example.com'});
-  if(target==='https://api.resend.com/emails'){const body=JSON.parse(options.body);subject=body.subject;text=body.text;assert.equal(body.from,'Acme <acme@example.com>');assert.equal(body.reply_to,'owner@example.com');return Response.json({id:'email'});}
+  if(target==='https://api.resend.com/emails'){const body=JSON.parse(options.body);subject=body.subject;text=body.text;assert.equal(body.from,'Acme <acme@example.com>');assert.equal(body.reply_to,'owner@example.com');assert.match(body.text,/- Repair/);assert.match(body.text,/Alex Owner/);assert.match(body.text,/555-0100/);return Response.json({id:'email'});}
   if(options.method==='PATCH')return new Response(null,{status:204});
   assert.fail(`Unexpected ${target}`);
  },async()=>{await runScheduled({...baseEnv,RESEND_API_KEY:'resend',RESEND_FROM_EMAIL:'quotes@example.com',PUBLIC_APP_URL:'https://app.example'},new Date('2025-01-05T09:00:00Z'));});
@@ -443,6 +443,7 @@ test('follow-ups send in-app and unused AI drafts stay out of the quote',async()
  const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
  assert.match(html,/id="ai-scope-preview"/);assert.match(html,/id="ai-scope-use"/);assert.match(html,/id="ai-scope-discard"/);
  assert.match(app,/Follow-up sent/);assert.match(app,/sendCustomerEmail\(quote, subject, body, 'Follow-up sent'\)/);
+ assert.match(app,/quoteItemLabels\(quote\)/);assert.match(app,/emailSignature\(\)/);
  assert.match(app,/clearUnusedAiDraft\(\)/);assert.match(app,/It stays out of the quote until you use it/);
  assert.doesNotMatch(app,/terms\.value = result\.reply/);
 });

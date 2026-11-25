@@ -22,6 +22,15 @@
     const code = CURRENCIES.includes(currency) ? currency : 'USD';
     return new Intl.NumberFormat(undefined, { style: 'currency', currency: code, maximumFractionDigits: 2 }).format(Number(amount) || 0);
   }
+  function quoteItemLabels(quote) {
+    const labels = (quote.lineItems || []).map(item => String(item.description || '').trim()).filter(Boolean).slice(0, 8);
+    if (labels.length) return labels;
+    const service = String(quote.service || '').trim();
+    return service ? [service] : [];
+  }
+  function emailSignature() {
+    return [profile.fullName, profile.businessName, profile.phone].map(value => String(value || '').trim()).filter(Boolean).join('\n');
+  }
   function formatTotals(items) {
     const totals = new Map();
     for (const item of items) {
@@ -1882,9 +1891,10 @@
         catch (error) { return showToast(`Could not create quote link: ${error.message}`); }
       }
       const quoteLink = `${window.location.origin}/q/${quote.publicToken}`;
-      const subject = `Your ${quote.service} quote from ${profile.businessName || 'our team'}`;
+      const subject = `Your ${quote.service} quote from ${profile.businessName || profile.fullName || 'our team'}`;
       const followUpDate = shortDate(quote.followUp);
-      const body = `Hi ${quote.customer},\n\nThank you for the opportunity to provide a quote for ${quote.service}.\n\nQuote total: ${formatMoney(quote.amount, quote.currency)}\n\nReview and respond to your quote: ${quoteLink}\n\nPlease let me know if you have any questions. I’ll plan to follow up on ${followUpDate}.\n\nBest,\n${profile.fullName || ''}${profile.businessName ? `\n${profile.businessName}` : ''}${profile.phone ? `\n${profile.phone}` : ''}`;
+      const items = quoteItemLabels(quote).map(label => `- ${label}`).join('\n');
+      const body = `Hi ${quote.customer},\n\nThank you for the opportunity to quote this work.\n\n${items}\n\nQuote total: ${formatMoney(quote.amount, quote.currency)}\n\nReview and respond to your quote: ${quoteLink}\n\nPlease let me know if you have any questions. I’ll plan to follow up on ${followUpDate}.\n\nBest,\n${emailSignature()}`;
       await sendCustomerEmail(quote, subject, body, 'Quote email sent');
       return;
     }
@@ -1896,7 +1906,8 @@
       }
       const quoteLink = `${window.location.origin}/q/${quote.publicToken}`;
       const subject = `Following up on your ${quote.service} quote`;
-      const body = `Hi ${quote.customer},\n\nI wanted to follow up on the quote for ${quote.service} (${formatMoney(quote.amount, quote.currency)}).\n\nReview your quote: ${quoteLink}\n\nDo you have any questions, or is there anything else I can help with?\n\nBest,\n${profile.fullName || ''}${profile.businessName ? `\n${profile.businessName}` : ''}`;
+      const items = quoteItemLabels(quote).map(label => `- ${label}`).join('\n');
+      const body = `Hi ${quote.customer},\n\nA quick reminder of the quote I sent.\n\n${items}\n\nQuote total: ${formatMoney(quote.amount, quote.currency)}\n\nReview your quote: ${quoteLink}\n\nDo you have any questions, or is there anything else I can help with?\n\nBest,\n${emailSignature()}`;
       await sendCustomerEmail(quote, subject, body, 'Follow-up sent');
       return;
     }

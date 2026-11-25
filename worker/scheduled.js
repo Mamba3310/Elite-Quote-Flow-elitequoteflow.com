@@ -7,7 +7,7 @@ const MAX_PLANS_PER_RUN = 100;
 async function fetchDueQuotes(base, key, today) {
   const rows = [];
   for (let offset = 0; ; offset += MAX_QUOTES_PER_RUN) {
-    const response = await fetch(`${base}/rest/v1/quotes?status=eq.sent&select=id,user_id,customer,email,service,public_token,expires_at,follow_up,reminder_count,last_reminder_at&or=(expires_at.lte.${today},follow_up.lte.${today})&order=id&limit=${MAX_QUOTES_PER_RUN}&offset=${offset}`, {
+    const response = await fetch(`${base}/rest/v1/quotes?status=eq.sent&select=id,user_id,customer,email,service,amount,currency,line_items,public_token,expires_at,follow_up,reminder_count,last_reminder_at&or=(expires_at.lte.${today},follow_up.lte.${today})&order=id&limit=${MAX_QUOTES_PER_RUN}&offset=${offset}`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` }
     });
     if (!response.ok) throw new Error(`Supabase reminder query failed (${response.status}).`);
@@ -31,14 +31,30 @@ async function fetchProOwners(base, key, userIds) {
   return pro;
 }
 
-async function sendReminder(env, quote, stage = 0, businessName = '', replyTo = '') {
-  const sender = businessSender(env, { businessName, replyTo });
+function quoteItemLabels(quote) {
+  const items = Array.isArray(quote.line_items) ? quote.line_items : [];
+  const labels = items.map(item => String(item?.description || '').trim()).filter(Boolean).slice(0, 8);
+  if (labels.length) return labels;
+  const service = String(quote.service || '').trim();
+  return service ? [service] : [];
+}
+
+function reminderSignature(profile) {
+  return [profile.fullName, profile.businessName, profile.phone].map(value => String(value || '').trim()).filter(Boolean).join('\n');
+}
+
+async function sendReminder(env, quote, stage = 0, profile = {}, replyTo = '') {
+  const sender = businessSender(env, { businessName: profile.businessName, fullName: profile.fullName, replyTo });
   if (!env.RESEND_API_KEY || !env.RESEND_FROM_EMAIL || !sender || !quote.email) return false;
   const link = `${env.PUBLIC_APP_URL || 'https://elitequoteflow.com'}/q/${quote.public_token}`;
+  const items = quoteItemLabels(quote).map(label => `- ${label}`).join('\n');
+  const total = quote.amount == null || quote.amount === '' ? '' : `Quote total: ${quote.amount} ${quote.currency || 'USD'}\n\n`;
+  const signature = reminderSignature(profile);
+  const signoff = signature ? `\n\nBest,\n${signature}` : '';
   const messages = [
-    { subject: `Your ${quote.service} quote is ready`, text: `Hello ${quote.customer},\n\nJust a quick note that your quote for ${quote.service} is ready to review. You can view the quote and let us know what you think here:\n${link}\n\nPlease reply to this email if you have questions.` },
-    { subject: `Any questions about your ${quote.service} quote?`, text: `Hello ${quote.customer},\n\nI wanted to check whether you had any questions about the quote for ${quote.service}. If anything needs clarification, you can review it here or reply to this email:\n${link}\n\nNo pressure; happy to help.` },
-    { subject: `Last check-in about your ${quote.service} quote`, text: `Hello ${quote.customer},\n\nOne last check-in about your ${quote.service} quote. If the timing is not right, that is okay. You can review the details here, or reply if you would like to discuss another option:\n${link}\n\nThank you for considering us.` }
+    { subject: `Your ${quote.service} quote is ready`, text: `Hello ${quote.customer},\n\nJust a quick note that your quote is ready to review.\n\n${items}\n\n${total}You can view the quote and let us know what you think here:\n${link}\n\nPlease reply to this email if you have questions.${signoff}` },
+    { subject: `Any questions about your ${quote.service} quote?`, text: `Hello ${quote.customer},\n\nI wanted to check whether you had any questions about this quote.\n\n${items}\n\n${total}If anything needs clarification, you can review it here or reply to this email:\n${link}\n\nNo pressure; happy to help.${signoff}` },
+    { subject: `Last check-in about your ${quote.service} quote`, text: `Hello ${quote.customer},\n\nOne last check-in about this quote.\n\n${items}\n\n${total}If the timing is not right, that is okay. You can review the details here, or reply if you would like to discuss another option:\n${link}\n\nThank you for considering us.${signoff}` }
   ];
   const message = messages[Math.min(stage, messages.length - 1)];
   const response = await fetch('https://api.resend.com/emails', {
@@ -151,11 +167,11 @@ export async function runScheduled(env, now = new Date()) {
     const ids = [...proOwners];
     for (let i = 0; i < ids.length; i += 50) {
       const chunk = ids.slice(i, i + 50);
-      const response = await fetch(`${base}/rest/v1/profiles?id=in.(${chunk.map(id => `"${id}"`).join(',')})&select=id,business_name`, {
+      const response = await fetch(`${base}/rest/v1/profiles?id=in.(${chunk.map(id => `"${id}"`).join(',')})&select=id,business_name,full_name,phone`, {
         headers: { apikey: key, Authorization: `Bearer ${key}` }
       });
       if (response.ok) {
-        for (const row of await response.json()) businessNames.set(row.id, row.business_name || '');
+        for (const row of await response.json()) businessNames.set(row.id, { businessName: row.business_name || '', fullName: row.full_name || '', phone: row.phone || '' });
       }
     }
   }
@@ -184,7 +200,7 @@ export async function runScheduled(env, now = new Date()) {
       const dueForStage = dueAt && now.getTime() >= dueAt.getTime() + (cadenceDays[reminderCount] ?? Infinity) * 24 * 60 * 60 * 1000;
       const quietPeriodElapsed = !last || now.getTime() - last.getTime() >= 24 * 60 * 60 * 1000;
       if (dueForStage && quietPeriodElapsed && reminderCount < 3) {
-        const sent = await sendReminder(env, quote, reminderCount, businessNames.get(quote.user_id) || '', await ownerReplyTo(base, key, quote.user_id, ownerEmails));
+        const sent = await sendReminder(env, quote, reminderCount, businessNames.get(quote.user_id) || {}, await ownerReplyTo(base, key, quote.user_id, ownerEmails));
         if (sent) {
           const update = await fetch(`${base}/rest/v1/quotes?id=eq.${encodeURIComponent(quote.id)}&status=eq.sent`, {
             method: 'PATCH',
