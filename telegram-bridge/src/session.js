@@ -5,6 +5,7 @@ export const HELP = [
   "Your computer can stay off. The agent runs in Cursor's cloud.",
   "",
   "Send a message to start an agent, or to continue the one this chat is using.",
+  "Send a photo of text and the bot reads it into that message.",
   "/status shows that agent",
   "/attach bc-... continues an existing agent",
   "/new starts a fresh agent on your next message",
@@ -64,6 +65,73 @@ export function interpret(text) {
     return { type: "attach", id };
   }
   return { type: "prompt", text: trimmed };
+}
+
+const MAX_IMAGE_BYTES = 1_000_000;
+const IMAGE_MIME = /^image\/(jpeg|png|webp|gif)$/;
+export const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
+
+export function imageAttachment(message) {
+  const photos = Array.isArray(message?.photo) ? message.photo.filter((photo) => photo?.file_id) : [];
+  if (photos.length) {
+    const readable = photos.filter((photo) => !photo.file_size || photo.file_size <= MAX_IMAGE_BYTES);
+    const pool = readable.length ? readable : photos;
+    const best = pool.reduce((current, photo) => ((photo.file_size || 0) >= (current.file_size || 0) ? photo : current));
+    return { fileId: best.file_id, mime: "image/jpeg", tooLarge: !readable.length };
+  }
+  const document = message?.document;
+  if (document?.file_id && IMAGE_MIME.test(document.mime_type || "")) {
+    return {
+      fileId: document.file_id,
+      mime: document.mime_type,
+      tooLarge: Boolean(document.file_size && document.file_size > MAX_IMAGE_BYTES),
+    };
+  }
+  return null;
+}
+
+export function bytesToDataUrl(bytes, mime = "image/jpeg") {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
+  }
+  return `data:${mime};base64,${btoa(binary)}`;
+}
+
+export function visionText(result) {
+  if (!result) return "";
+  if (typeof result === "string") return result.trim();
+  return String(result.response || result.description || result.result || "").trim();
+}
+
+export function usableTranscript(text) {
+  const value = String(text || "").trim();
+  if (!value || /^\(no text\)$/i.test(value) || /^no text( visible| found)?\.?$/i.test(value)) return "";
+  return value.slice(0, 8000);
+}
+
+export function composePrompt(caption, transcript) {
+  const note = String(caption || "").trim();
+  const text = String(transcript || "").trim();
+  if (text && note) return `${note}\n\nText read from the photo:\n${text}`;
+  if (text) return `Text read from the photo:\n${text}`;
+  return note;
+}
+
+export async function readImageText(ai, bytes, mime = "image/jpeg") {
+  if (!ai || typeof ai.run !== "function") throw new Error("Photo reading is not configured.");
+  if (!bytes?.byteLength) throw new Error("The photo was empty.");
+  if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("That photo is too large to read.");
+  const result = await ai.run(VISION_MODEL, {
+    messages: [{
+      role: "user",
+      content: "Transcribe every piece of visible text exactly. Keep line breaks. Do not describe the picture. If there is no text, reply with exactly (no text).",
+    }],
+    image: bytesToDataUrl(bytes, mime),
+    max_tokens: 1024,
+  });
+  return usableTranscript(visionText(result));
 }
 
 export function accessFor(env, userId) {
@@ -216,6 +284,21 @@ export function telegramClient(env, fetchImpl = fetch) {
         if (!response.ok) throw new Error(`Telegram send failed (${response.status})`);
       }
     },
+    async download(fileId) {
+      if (!fileId || /[^A-Za-z0-9_-]/.test(fileId)) throw new Error("Telegram file id is not valid.");
+      const metaResponse = await fetchImpl(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`);
+      if (!metaResponse.ok) throw new Error(`Telegram file lookup failed (${metaResponse.status})`);
+      const meta = await metaResponse.json();
+      const path = meta?.result?.file_path;
+      if (!path || path.includes("..") || path.startsWith("/")) throw new Error("Telegram file lookup returned no path.");
+      const size = Number(meta?.result?.file_size || 0);
+      if (size > MAX_IMAGE_BYTES) throw new Error("That photo is too large to read.");
+      const fileResponse = await fetchImpl(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${path}`);
+      if (!fileResponse.ok) throw new Error(`Telegram file download failed (${fileResponse.status})`);
+      const bytes = new Uint8Array(await fileResponse.arrayBuffer());
+      if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error("That photo is too large to read.");
+      return bytes;
+    },
   };
 }
 
@@ -241,8 +324,10 @@ export async function handleUpdate({ store, cursor, telegram, env, update }) {
   const loaded = await loadChat(store, chatId, update.update_id);
   if (loaded.duplicate) return { duplicate: true };
   const chat = loaded.chat;
-  const text = message.text || message.caption || "";
-  const action = text ? interpret(text) : { type: "notext" };
+  const typed = message.text || message.caption || "";
+  let action = typed ? interpret(typed) : { type: "notext" };
+  const image = imageAttachment(message);
+  const readsImage = image && (action.type === "notext" || action.type === "prompt" || action.type === "new");
 
   if (access === "unconfigured") {
     await store.put(chatKey(chatId), chat);
@@ -251,9 +336,25 @@ export async function handleUpdate({ store, cursor, telegram, env, update }) {
   }
 
   try {
+    if (readsImage) {
+      if (image.tooLarge) throw new Error("That photo is too large to read.");
+      const bytes = await telegram.download(image.fileId);
+      const transcript = await readImageText(env.AI, bytes, image.mime);
+      if (!transcript && (action.type === "notext" || (action.type === "new" && !action.text))) {
+        await store.put(chatKey(chatId), chat);
+        await telegram.send(chatId, "I could not read any text in that photo. Try a closer, well-lit picture.");
+        return { scheduleAlarm: false };
+      }
+      const combined = composePrompt(action.type === "notext" ? "" : action.text, transcript);
+      if (action.type === "new") action = { type: "new", text: combined };
+      else action = { type: "prompt", text: combined };
+    }
     if (action.type === "notext") {
       await store.put(chatKey(chatId), chat);
-      await telegram.send(chatId, "Send a text message. Photos and files stay on your phone.");
+      const otherFile = message.document || message.video || message.audio || message.voice || message.sticker;
+      await telegram.send(chatId, otherFile
+        ? "Send a text message or a photo of text. Other files stay on your phone."
+        : "Send a text message or a photo of text.");
       return { scheduleAlarm: false };
     }
     if (action.type === "whoami") {
