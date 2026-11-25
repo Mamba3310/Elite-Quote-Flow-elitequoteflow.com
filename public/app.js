@@ -127,7 +127,7 @@
     authForm.hidden = false;
     registerForm.hidden = true;
     $('#auth-title').textContent = recovery ? 'Choose a new password.' : 'Welcome back.';
-    $('#auth-description').textContent = recovery ? 'Use a new password to secure your account.' : 'Sign in to securely access and sync your quotes.';
+    $('#auth-description').textContent = recovery ? 'Choose a new password, then come back to the quotes, follow-ups, and approvals on your desk.' : 'Sign in to the quotes still open, the follow-ups that are due, and the approvals waiting on your desk.';
     $('#auth-password').autocomplete = recovery ? 'new-password' : 'current-password';
     $('#auth-password').value = '';
     $('#auth-password').placeholder = recovery ? 'Enter your new password' : 'Your password';
@@ -156,16 +156,40 @@
     $('#auth-signup-prompt').hidden = true;
     $('#auth-mode-toggle').hidden = true;
     $('#auth-title').textContent = 'Create your account.';
-    $('#auth-description').textContent = 'Set up your workspace and keep your quotes safely in sync.';
+    $('#auth-description').textContent = 'Create the account, then keep every quote, the next follow-up, and the customer’s approval in one place.';
     $('#register-error').hidden = true;
     $('#register-error').textContent = '';
     registerForm.reset();
   }
 
+  function greetingName() {
+    const name = formatDisplayName(profile.fullName || currentUser?.user_metadata?.full_name || '');
+    const first = name.split(' ')[0];
+    return first && first.length <= 24 ? first : '';
+  }
   function updateGreeting() {
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-    $('#greeting-text').textContent = greeting;
+    const name = greetingName();
+    $('#greeting-text').textContent = name ? `${greeting}, ${name}` : greeting;
+  }
+  function updateDeskIntro(openQuotes, dueQuotes) {
+    const subtitle = $('#welcome-subtitle');
+    if (!subtitle) return;
+    updateGreeting();
+    if (!quotes.length) {
+      subtitle.textContent = 'From the first quote to the customer’s approval, keep the estimate, the follow-up, and the next conversation in one place.';
+      return;
+    }
+    const openCount = openQuotes.length;
+    const dueCount = dueQuotes.length;
+    const openLine = openCount
+      ? `${openCount} open quote${openCount === 1 ? ' is' : 's are'} still waiting on a decision, worth ${formatTotals(openQuotes)}`
+      : 'No open quotes are waiting on a decision';
+    const dueLine = dueCount
+      ? `${dueCount} follow-up${dueCount === 1 ? ' is' : 's are'} due`
+      : 'no follow-ups are due today';
+    subtitle.textContent = `${openLine}, and ${dueLine}. Send the next quote, check in before a job goes quiet, and keep the approval on the same record.`;
   }
 
   function showSignedIn() {
@@ -192,7 +216,7 @@
     $('#upgrade-strip').classList.toggle('is-pro-active', Boolean(profile.isPro));
     const eyebrow = document.querySelector('#upgrade-strip .eyebrow');
     if (eyebrow) eyebrow.textContent = profile.isStaff ? 'STAFF REVIEW' : 'ELITE QUOTE FLOW PRO';
-    $('#pro-upgrade-title').textContent = profile.isStaff ? 'Staff review access is active.' : profile.isPro ? 'Your Pro Desk is active.' : 'Unlock your Pro Desk.';
+    $('#pro-upgrade-title').textContent = profile.isStaff ? 'Staff review access is active. Pro tools are open for cross-checking the desk.' : profile.isPro ? 'Your Pro Desk is active, from follow-up through getting paid.' : 'Keep follow-ups, deposits, and branded email moving on Pro.';
     const openCount = openQuoteCount();
     $('#pro-upgrade-copy').textContent = profile.isStaff
       ? 'Pro tools are unlocked so your team can cross-check quotes, email, and the rest of the desk. This is not a paid subscription.'
@@ -1109,6 +1133,7 @@
     renderCalendar();
     renderInvoices();
     updateQuoteCalculator();
+    updateDeskIntro(openQuotes, dueQuotes);
     $('#nav-total').textContent = String(quotes.length);
     $('#nav-followups').textContent = String(dueQuotes.length);
     $('#count-all').textContent = String(quotes.length);
