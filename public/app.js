@@ -2822,7 +2822,7 @@
       input.focus();
     }
   });
-  document.querySelectorAll('.side-nav [data-feature-target]').forEach(link => link.addEventListener('click', () => { document.body.classList.remove('nav-open'); $('#mobile-menu').setAttribute('aria-expanded', 'false'); $('#mobile-menu').setAttribute('aria-label', 'Open navigation'); }));
+  document.querySelectorAll('.side-nav [data-feature-target], .side-nav #import-estimate-button, .side-nav #invite-button').forEach(link => link.addEventListener('click', () => { document.body.classList.remove('nav-open'); $('#mobile-menu').setAttribute('aria-expanded', 'false'); $('#mobile-menu').setAttribute('aria-label', 'Open navigation'); }));
   const referralParam = new URLSearchParams(window.location.search).get('ref');
   if (referralParam && /^EQF[A-Z0-9]{4,16}$/i.test(referralParam)) {
     try { localStorage.setItem('quoteflow.referralCode', referralParam.toUpperCase()); } catch { /* ignore */ }
