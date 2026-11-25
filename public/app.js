@@ -210,7 +210,14 @@
     lifetimeButton.disabled = Boolean(profile.isLifetime);
     if (profile.isLifetime) lifetimeButton.setAttribute('aria-disabled', 'true');
     else lifetimeButton.removeAttribute('aria-disabled');
-    document.querySelectorAll('.pro-feature').forEach(button => { button.hidden = !profile.isPro; });
+    document.querySelectorAll('.pro-feature').forEach(button => {
+      button.hidden = false;
+      button.classList.toggle('is-locked', !profile.isPro);
+    });
+    document.querySelectorAll('[data-pro-feature]').forEach(link => {
+      link.classList.toggle('is-locked', !profile.isPro);
+      link.setAttribute('aria-disabled', profile.isPro ? 'false' : 'true');
+    });
     document.querySelectorAll('.pro-only-field').forEach(field => {
       field.classList.toggle('is-locked', !profile.isPro);
       field.querySelectorAll('input,select,textarea,button').forEach(control => {
@@ -1621,6 +1628,7 @@
     } catch (error) { showToast(error.message, 6000); }
   });
   $('#copy-referral-link')?.addEventListener('click', async () => {
+    if (!requirePro('Referral credits')) return;
     const link = referralState?.referralLink || $('#referral-link-value')?.textContent;
     if (!link || link === '—') return showToast('Referral link is not ready yet.');
     try { await navigator.clipboard.writeText(link); showToast('Referral link copied.'); }
@@ -1641,6 +1649,17 @@
   });
   document.querySelectorAll('.filter-tab').forEach(tab => tab.addEventListener('click', () => setFilter(tab.dataset.filter)));
   document.querySelectorAll('[data-nav-filter]').forEach(link => link.addEventListener('click', () => setFilter(link.dataset.navFilter)));
+  document.querySelectorAll('[data-feature-target]').forEach(link => link.addEventListener('click', () => {
+    document.body.classList.remove('nav-open');
+    const feature = link.dataset.proFeature;
+    if (feature && !isPro()) requirePro(feature);
+    const action = link.dataset.featureAction;
+    if (action === 'templates' && (!feature || isPro())) $('#manage-templates-button')?.click();
+    else if (action === 'import' && (!feature || isPro())) $('#import-estimate-button')?.click();
+    else if (action === 'ai-draft' && isPro()) { $('#new-quote-button')?.click(); $('#ai-scope-draft')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    else document.getElementById(link.dataset.featureTarget)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelectorAll('[data-feature-target]').forEach(item => item.classList.toggle('active', item === link));
+  }));
   $('#pipeline-stages').addEventListener('click', event => {
     const stage = event.target.closest('[data-pipeline-filter]');
     if (stage) setFilter(stage.dataset.pipelineFilter);
@@ -1933,6 +1952,7 @@
   }
 
   $('#export-button').addEventListener('click', () => {
+    if (!requirePro('Quote export')) return;
     if (!quotes.length) return showToast('Add a quote before exporting your list.');
     const fields = ['customer', 'service', 'email', 'phone', 'referralSource', 'amount', 'currency', 'followUp', 'status', 'note', 'createdAt'];
     downloadExport(`elite-quote-flow-quotes-${dateOffset(0)}.csv`, csvForRows(fields, quotes), 'text/csv;charset=utf-8;');
@@ -1940,6 +1960,7 @@
   });
 
   $('#export-customers-button').addEventListener('click', () => {
+    if (!requirePro('Customer export')) return;
     if (!quotes.length) return showToast('Add a quote before exporting your customers.');
     const fields = ['customer', 'email', 'phone', 'referralSource'];
     const uniqueCustomers = new Map();
@@ -1960,6 +1981,7 @@
   });
 
   $('#export-calendar-button').addEventListener('click', () => {
+    if (!requirePro('Calendar export')) return;
     const scheduled = quotes.filter(quote => quote.status === 'sent' && asDate(quote.followUp));
     if (!scheduled.length) return showToast('Add an open quote with a follow-up date before exporting your calendar.');
     const escapeICS = value => String(value ?? '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
@@ -1977,6 +1999,7 @@
   });
 
   $('#export-accounting-button').addEventListener('click', () => {
+    if (!requirePro('Accounting export')) return;
     const records = quotes.filter(quote => quote.status === 'won').map(quote => {
       const currency = quote.currency || 'USD';
       const taxRate = Math.max(0, Number(quote.taxRate) || 0);
@@ -2090,6 +2113,7 @@
   });
 
   $('#export-contacts-button').addEventListener('click', () => {
+    if (!requirePro('Contact export')) return;
     if (!quotes.length) return showToast('Add a quote before exporting your contacts.');
     const escapeVCard = value => String(value ?? '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
     const contacts = new Map();
@@ -2455,7 +2479,7 @@
   $('#history-note-form').addEventListener('submit', event => { event.preventDefault(); saveCustomerNote($('#history-note-input')); });
   $('#history-close').addEventListener('click', () => $('#history-dialog').close());
   $('#recurring-form').addEventListener('submit', async event => {
-    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
+    event.preventDefault(); if (!requirePro('Recurring services')) return; const form = event.currentTarget; const data = new FormData(form);
     const customer = String(data.get('customer') || '').trim(); const service = String(data.get('service') || '').trim(); const amount = Number(data.get('amount')); const date = String(data.get('next_service_date') || '');
     if (!customer || !service || !Number.isFinite(amount) || amount < 0 || !asDate(date)) return showToast('Enter a customer, service, valid amount, and next service date.');
     const { data: plan, error } = await supabaseClient.from('recurring_service_plans').insert({ customer, email: String(data.get('email') || ''), service, amount, currency: 'USD', frequency: String(data.get('frequency')), next_service_date: date }).select().single();
@@ -2529,7 +2553,7 @@
       input.focus();
     }
   });
-  document.querySelectorAll('.side-nav a').forEach(link => link.addEventListener('click', () => { document.body.classList.remove('nav-open'); $('#mobile-menu').setAttribute('aria-expanded', 'false'); $('#mobile-menu').setAttribute('aria-label', 'Open navigation'); }));
+  document.querySelectorAll('.side-nav [data-feature-target]').forEach(link => link.addEventListener('click', () => { document.body.classList.remove('nav-open'); $('#mobile-menu').setAttribute('aria-expanded', 'false'); $('#mobile-menu').setAttribute('aria-label', 'Open navigation'); }));
   const referralParam = new URLSearchParams(window.location.search).get('ref');
   if (referralParam && /^EQF[A-Z0-9]{4,16}$/i.test(referralParam)) {
     try { localStorage.setItem('quoteflow.referralCode', referralParam.toUpperCase()); } catch { /* ignore */ }

@@ -26,3 +26,9 @@
 .import-estimate-review{padding:12px;border:1px solid var(--line);border-radius:8px;background:#0f141c}
 .empty-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 @media(max-width:1200px){.metrics-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.side-nav{flex:1;min-height:0;overflow:auto;align-content:start;padding-bottom:8px;gap:2px}
+.nav-group{margin:10px 8px 2px;color:#75849e;font-size:8px;font-weight:800;letter-spacing:1.2px}
+button.nav-link{width:100%;min-height:34px;border:0;background:transparent;text-align:left}
+.nav-link .pro-badge{margin-left:auto}
+.nav-link.is-locked .pro-badge{background:#3a2a14;color:#f1bd63}
+.feature-anchor{scroll-margin-top:88px}
