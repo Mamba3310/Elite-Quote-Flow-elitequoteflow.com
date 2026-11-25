@@ -22,13 +22,39 @@
     const code = CURRENCIES.includes(currency) ? currency : 'USD';
     return new Intl.NumberFormat(undefined, { style: 'currency', currency: code, maximumFractionDigits: 2 }).format(Number(amount) || 0);
   }
-  function formatTotals(items) {
+  function currencyTotals(items) {
     const totals = new Map();
     for (const item of items) {
       const code = CURRENCIES.includes(item.currency) ? item.currency : 'USD';
       totals.set(code, (totals.get(code) || 0) + Number(item.amount || 0));
     }
-    return [...totals].map(([code, amount]) => formatMoney(amount, code)).join(' · ') || formatMoney(0);
+    return [...totals];
+  }
+  function formatTotals(items) {
+    return currencyTotals(items).map(([code, amount]) => formatMoney(amount, code)).join(' · ') || formatMoney(0);
+  }
+  function renderAcceptedTotal(element, items) {
+    const totals = currencyTotals(items);
+    const split = totals.length > 1;
+    element.classList.toggle('is-split', split);
+    element.replaceChildren();
+    if (!split) {
+      element.textContent = totals.length ? formatMoney(totals[0][1], totals[0][0]) : formatMoney(0);
+      return;
+    }
+    totals
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .forEach(([code, amount]) => {
+        const line = document.createElement('span');
+        line.className = 'metric-currency-line';
+        const label = document.createElement('small');
+        label.textContent = code;
+        const figure = document.createElement('b');
+        const whole = Math.abs(amount - Math.round(amount)) < 0.001;
+        figure.textContent = new Intl.NumberFormat(undefined, { style: 'currency', currency: code, maximumFractionDigits: whole ? 0 : 2 }).format(amount);
+        line.append(label, figure);
+        element.append(line);
+      });
   }
   function currencyStep(code) {
     const digits = new Intl.NumberFormat(undefined, { style: 'currency', currency: CURRENCIES.includes(code) ? code : 'USD' }).resolvedOptions().maximumFractionDigits;
@@ -1170,7 +1196,7 @@
     $('#metric-open').textContent = formatTotals(openQuotes);
     $('#metric-due').textContent = String(dueQuotes.length);
     $('#due-caption').textContent = dueQuotes.length ? `${dueQuotes.filter(quote => daysUntil(quote.followUp) < 0).length} overdue · ${dueQuotes.filter(quote => daysUntil(quote.followUp) === 0).length} due today` : 'No follow-ups due today';
-    $('#metric-won').textContent = formatTotals(wonThisMonth);
+    renderAcceptedTotal($('#metric-won'), wonThisMonth);
     $('#won-caption').textContent = `${wonThisMonth.length} accepted quote${wonThisMonth.length === 1 ? '' : 's'}`;
     const recoveredQuotes = quotes.filter(isRecoveredByFollowUp);
     const recoveredEl = $('#metric-recovered');
