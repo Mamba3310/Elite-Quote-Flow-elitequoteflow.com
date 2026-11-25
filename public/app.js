@@ -1833,7 +1833,7 @@
           const response = await fetch('/api/send-quote-email', { method: 'POST', headers, body: JSON.stringify({ quoteId: quote.id, subject, body }) });
           const result = await response.json();
           if (!response.ok) throw new Error(result.error || 'Could not send quote email.');
-          showToast('Quote email sent from your business name.');
+          showToast(result.from ? `Quote email sent as ${result.from}.` : 'Quote email sent from your business name.');
           return;
         } catch (error) {
           showToast(`${error.message} Opening your email app instead…`, 5000);
