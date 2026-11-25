@@ -49,15 +49,39 @@ export function isProProfile(profile) {
   return Boolean(profile?.is_pro);
 }
 
+export function staffEmails(env) {
+  return String(env.STAFF_EMAILS || env.OWNER_ANALYTICS_EMAILS || env.OWNER_ANALYTICS_EMAIL || '')
+    .split(',')
+    .map(email => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isStaffUser(user, env) {
+  const email = String(user?.email || '').trim().toLowerCase();
+  return Boolean(email) && staffEmails(env).includes(email);
+}
+
 export async function requireProUser(request, env) {
   const auth = await requireAuthenticatedUser(request, env);
   if (auth.error) return auth;
   const { profile, error } = await loadProfileAccess(env, auth.user.id, auth.authorization);
   if (error) return { error };
-  if (!isProProfile(profile)) {
+  const staff = isStaffUser(auth.user, env);
+  if (!isProProfile(profile) && !staff) {
     return { error: json({ error: 'Elite Quote Flow Pro is required for this action. Upgrade from your dashboard to continue.' }, 402) };
   }
-  return { ...auth, profile };
+  return { ...auth, profile, staff, paidPro: isProProfile(profile) };
+}
+
+export async function onAccountAccess(request, env) {
+  if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
+  const auth = await requireAuthenticatedUser(request, env);
+  if (auth.error) return auth.error;
+  const loaded = await loadProfileAccess(env, auth.user.id, auth.authorization);
+  if (loaded.error) return loaded.error;
+  const pro = isProProfile(loaded.profile);
+  const staff = isStaffUser(auth.user, env);
+  return json({ pro, staff, access: pro ? 'pro' : staff ? 'staff' : 'free' });
 }
 
 export { json, readJson };

@@ -190,9 +190,13 @@
     const name = formatDisplayName(profile.fullName || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0]) || 'Your profile';
     const avatar = name.trim().split(/\\s+/).slice(0, 2).map(part => part[0] || '').join('').toUpperCase() || 'Q';
     $('#upgrade-strip').classList.toggle('is-pro-active', Boolean(profile.isPro));
-    $('#pro-upgrade-title').textContent = profile.isPro ? 'Your Pro Desk is active.' : 'Unlock your Pro Desk.';
+    const eyebrow = document.querySelector('#upgrade-strip .eyebrow');
+    if (eyebrow) eyebrow.textContent = profile.isStaff ? 'STAFF REVIEW' : 'ELITE QUOTE FLOW PRO';
+    $('#pro-upgrade-title').textContent = profile.isStaff ? 'Staff review access is active.' : profile.isPro ? 'Your Pro Desk is active.' : 'Unlock your Pro Desk.';
     const openCount = openQuoteCount();
-    $('#pro-upgrade-copy').textContent = profile.isPro
+    $('#pro-upgrade-copy').textContent = profile.isStaff
+      ? 'Pro tools are unlocked so your team can cross-check quotes, email, and the rest of the desk. This is not a paid subscription.'
+      : profile.isPro
       ? profile.isLifetime ? 'Your one-time purchase gives you permanent access to all Pro tools.' : 'Your Pro tools are ready. Manage billing or cancel your subscription securely.'
       : `Free tracks open quote value and recovered wins after a follow-up date. Pro adds automated reminders, deposits, branded email, multi-item quotes, AI drafting, exports, teams, and invoice collection · $14.99/mo or $149.99 lifetime. You have ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes.`;
     const monthlyButton = $('#upgrade-monthly-link');
@@ -200,7 +204,7 @@
     const manageButton = $('#upgrade-pro-link');
     monthlyButton.hidden = Boolean(profile.isPro);
     lifetimeButton.hidden = Boolean(profile.isPro);
-    manageButton.hidden = !profile.isPro || Boolean(profile.isLifetime);
+    manageButton.hidden = profile.isStaff || !profile.isPro || Boolean(profile.isLifetime);
     manageButton.textContent = 'Manage subscription';
     lifetimeButton.textContent = profile.isLifetime ? 'Lifetime Pro active' : 'Lifetime · $149.99';
     lifetimeButton.disabled = Boolean(profile.isLifetime);
@@ -250,6 +254,7 @@
       businessName: currentUser.user_metadata?.business_name || data?.business_name || '',
       phone: currentUser.user_metadata?.phone || data?.phone || '',
       isPro: Boolean(data?.is_pro),
+      isStaff: false,
       isLifetime: data?.stripe_subscription_status === 'lifetime',
       companyLogoUrl: data?.company_logo_url || '',
       brandColor: data?.brand_color || '#426DDE',
@@ -258,6 +263,17 @@
       referralCode: data?.referral_code || '',
       referralCreditsMonths: Number(data?.referral_credits_months || 0)
     };
+    try {
+      const headers = await authHeaders();
+      const accessResponse = await fetch('/api/account-access', { headers });
+      if (accessResponse.ok) {
+        const access = await accessResponse.json();
+        profile.isStaff = Boolean(access.staff) && !access.pro;
+        profile.isPro = Boolean(access.pro) || Boolean(access.staff);
+      }
+    } catch (error) {
+      console.warn('Could not check staff access', error);
+    }
     renderProfile();
     loadGrowthExtras().catch(() => {});
   }
