@@ -559,7 +559,9 @@ test('admin grants migration provides service-role CRUD on every admin dataset',
 
 test('wrangler defines daily production cron and prevents staging cron jobs',async()=>{
  const config=await readFile(new URL('../wrangler.toml',import.meta.url),'utf8');
+ assert.match(config,/\[\[ratelimits\]\]/);
  assert.match(config,/name = "BOOKING_RATE_LIMITER"/);
+ assert.doesNotMatch(config,/\[\[kv_namespaces\]\]/);
  const publicBookings=await readFile(new URL('../supabase-public-bookings.sql',import.meta.url),'utf8');assert.match(publicBookings,/create table if not exists public\.public_booking_requests/);assert.match(publicBookings,/submit_public_booking_request/);assert.match(publicBookings,/revoke all on public\.public_booking_requests from public, anon, authenticated/);
  assert.match(config,/name = "REVIEW_RATE_LIMITER"/);
  const reviews=await readFile(new URL('../supabase-customer-reviews.sql',import.meta.url),'utf8');assert.match(reviews,/status text not null default 'published'/);assert.match(reviews,/get_published_customer_reviews/);assert.match(reviews,/submit_customer_review/);assert.match(reviews,/customer_reviews_email_uidx/);assert.match(reviews,/revoke all on public\.customer_reviews from public, anon, authenticated/);
