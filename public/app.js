@@ -1447,6 +1447,11 @@
     const dueQuotes = quotes.filter(isDue);
     const upcomingQuotes = quotes.filter(isUpcoming);
     const openQuotes = quotes.filter(quote => quote.status === 'sent');
+    const sentThisMonth = openQuotes.filter(quote => {
+      if (!quote.createdAt) return false;
+      const created = new Date(quote.createdAt);
+      return Number.isFinite(created.getTime()) && created.getFullYear() === today.getFullYear() && created.getMonth() === today.getMonth();
+    });
     const wonThisMonth = quotes.filter(quote => {
       if (quote.status !== 'won') return false;
       const accepted = new Date(quote.statusChangedAt || quote.createdAt || Date.now());
@@ -1457,6 +1462,8 @@
     $('#metric-open').textContent = formatTotals(openQuotes);
     $('#metric-due').textContent = String(dueQuotes.length);
     $('#due-caption').textContent = dueQuotes.length ? `${dueQuotes.filter(quote => daysUntil(quote.followUp) < 0).length} overdue · ${dueQuotes.filter(quote => daysUntil(quote.followUp) === 0).length} due today` : 'No follow-ups due today';
+    $('#metric-sent').textContent = String(sentThisMonth.length);
+    $('#sent-caption').textContent = 'Currently sent · added this month';
     renderAcceptedTotal($('#metric-won'), wonThisMonth);
     const wonCurrencies = currencyTotals(wonThisMonth);
     $('#won-caption').textContent = wonCurrencies.length > 1
