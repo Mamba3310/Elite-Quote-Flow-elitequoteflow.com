@@ -3039,7 +3039,7 @@
   });
   $('#refresh-bookings').addEventListener('click', loadGrowthFeatures);
   $('#support-launch').addEventListener('click', () => supportDialog.showModal());
-  $('#landing-support-launch').addEventListener('click', () => supportDialog.showModal());
+  $('#landing-support-launch')?.addEventListener('click', () => supportDialog.showModal());
   const helpNudge = $('#help-nudge');
   let helpChime;
   const unlockHelpChime = () => {
