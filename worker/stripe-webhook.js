@@ -174,7 +174,28 @@ export async function onRequestPost({ request, env }) {
   if (!object) return json({ received: true });
 
   try {
-    if (event.type === 'checkout.session.completed' && object.mode === 'subscription' && ['paid', 'no_payment_required'].includes(object.payment_status)) {
+    if (event.type === 'checkout.session.completed' && object.mode === 'payment' && object.payment_status === 'paid' && object.metadata?.billing_plan === 'solo_paid_trial_14d') {
+      if (!Number.isInteger(object.amount_total) || object.amount_total !== 499 || String(object.currency || '').toLowerCase() !== 'usd' || !object.payment_method_types?.includes('card') || !object.payment_intent) {
+        throw new Error('Paid trial checkout did not confirm exactly USD $4.99 and card payment.');
+      }
+      const userId = await resolveCheckoutUserId(env, object);
+      const customerId = typeof object.customer === 'string' ? object.customer : object.customer?.id;
+      const paymentIntentId = typeof object.payment_intent === 'string' ? object.payment_intent : object.payment_intent?.id;
+      if (!customerId || !paymentIntentId || !env.STRIPE_SOLO_MONTHLY_PRICE_ID?.trim()) throw new Error('Paid trial checkout is missing a customer, payment, or configured monthly plan.');
+      const stripe = new Stripe(env.STRIPE_SECRET_KEY || '[REDACTED]', { httpClient: Stripe.createFetchHttpClient() });
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      const paymentMethodId = typeof paymentIntent.payment_method === 'string' ? paymentIntent.payment_method : paymentIntent.payment_method?.id;
+      if (!paymentMethodId) throw new Error('The paid trial card could not be verified for subscription billing.');
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: env.STRIPE_SOLO_MONTHLY_PRICE_ID.trim() }],
+        trial_period_days: 14,
+        default_payment_method: paymentMethodId,
+        metadata: { billing_plan: 'solo_paid_trial_14d', supabase_user_id: userId }
+      }, { idempotencyKey: `solo-paid-trial-${object.id}` });
+      if (!subscription?.id || !['trialing', 'active'].includes(subscription.status)) throw new Error('Stripe did not activate the paid trial subscription.');
+      await setProStatus(env, userId, true, customerId, subscription.id, subscription.status);
+    } else if (event.type === 'checkout.session.completed' && object.mode === 'subscription' && ['paid', 'no_payment_required'].includes(object.payment_status)) {
       const userId = await resolveCheckoutUserId(env, object);
       const subscriptionId = typeof object.subscription === 'string' ? object.subscription : object.subscription?.id;
       await setProStatus(env, userId, true, object.customer, subscriptionId, 'active');

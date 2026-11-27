@@ -264,17 +264,29 @@ test('review honeypot silently accepts bots without database writes',async()=>{
 
 test('landing page shows an honest sample preview, signup CTAs, interactive value estimator, steps, and current plan path',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/landing-refresh.css',import.meta.url),'utf8');const responsiveCss=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');const desktopCss=await readFile(new URL('../public/desktop-showcase.css',import.meta.url),'utf8');const upgradeCss=await readFile(new URL('../public/upgrade-notice.css',import.meta.url),'utf8');
- assert.match(responsiveCss,/\.landing-preview\{max-width:640px/);assert.match(responsiveCss,/\.landing-preview\{max-width:640px;padding:20px\}/);assert.match(html,/id="landing-signin"/);assert.doesNotMatch(html,/landing-assistant-button/);assert.match(css,/\.lead-calculator/);assert.match(html,/Send the quote/);assert.match(html,/PRODUCT PREVIEW/);assert.match(html,/id="lead-calc-quotes"/);assert.match(html,/id="lead-calc-amount"/);assert.match(html,/id="lead-calc-result"/);assert.match(html,/id="landing-steps-cta"/);assert.match(html,/id="landing-pricing-cta"/);assert.match(html,/FREE TO START/);assert.match(html,/landing-pricing-grid/);assert.match(html,/Start free\. Upgrade when you need to get paid faster\./);assert.match(html,/Free covers the core follow-up desk\. Pro unlocks deposits, branded email, reminders, multi-item quotes, AI drafting, exports, teams, and invoice collection\./);assert.equal((html.match(/class="landing-plan-card/g)||[]).length,2);assert.match(html,/Stripe deposits and invoice balance collection/);assert.match(html,/No invented testimonials/);assert.match(html,/Watch the 60-second walkthrough/);assert.match(html,/id="landing-trades-title"/);assert.equal((html.match(/class="landing-plan-card/g)||[]).length,2);assert.match(html,/landing-trade-nav-label/);assert.match(html,/landing-trade-nav-select/);assert.doesNotMatch(html,/Choose your trade <span/);assert.match(await readFile(new URL('../public/marketing.js',import.meta.url),'utf8'),/landing-trade-nav-select/);assert.doesNotMatch(html,/Prototype preview/);assert.match(app,/updateLeadEstimate/);assert.match(app,/landing-calc-cta/);assert.match(app,/landing-pricing-cta/);assert.match(app,/Create an account/);
- assert.match(html,/id="metric-sent"/);assert.match(html,/SENT THIS MONTH/);assert.match(app,/const sentThisMonth = openQuotes\.filter/);assert.match(app,/created\.getFullYear\(\) === today\.getFullYear\(\) && created\.getMonth\(\) === today\.getMonth\(\)/);assert.match(app,/metric-sent.*sentThisMonth\.length/);assert.match(html,/id="customer-review-form"/);assert.match(html,/id="published-customer-reviews"/);assert.match(html,/id="team-panel"/);assert.match(html,/id="referral-panel"/);assert.match(await readFile(new URL('../public/reviews.js',import.meta.url),'utf8'),/api\/customer-reviews/);assert.match(app,/api\/send-quote-email/);assert.match(app,/api\/invoice-checkout/);assert.match(app,/FREE_OPEN_QUOTE_LIMIT/);assert.match(await readFile(new URL('../public/reviews.js',import.meta.url),'utf8'),/review\.review_text/);assert.doesNotMatch(app,/review\.customer_email/);
+ assert.match(responsiveCss,/\.landing-preview\{max-width:640px/);assert.match(responsiveCss,/\.landing-preview\{max-width:640px;padding:20px\}/);assert.match(html,/id="landing-signin"/);assert.doesNotMatch(html,/landing-assistant-button/);assert.match(css,/\.lead-calculator/);assert.match(html,/Send the quote/);assert.match(html,/PRODUCT PREVIEW/);assert.match(html,/id="lead-calc-quotes"/);assert.match(html,/id="lead-calc-amount"/);assert.match(html,/id="lead-calc-result"/);assert.match(html,/id="landing-steps-cta"/);assert.match(html,/id="landing-pricing-cta"/);assert.match(html,/FREE TO START/);assert.match(html,/landing-pricing-grid/);assert.match(html,/Start free\. Upgrade when you need to get paid faster\./);assert.match(html,/Start with 14 days of Pro for \$4\.99/);assert.match(html,/card is required/);assert.equal((html.match(/class="landing-plan-card/g)||[]).length,3);assert.match(html,/Stripe deposits and invoice balance collection/);assert.match(html,/Crew &amp; Team/);assert.match(html,/Includes 3 seats/);assert.match(html,/Crew &amp; Team is \$59\/month and includes 3 seats/);assert.doesNotMatch(html,/\+\$15 per extra seat/);assert.match(html,/No invented testimonials/);assert.match(html,/Watch the 60-second walkthrough/);assert.match(html,/id="landing-trades-title"/);assert.equal((html.match(/class="landing-plan-card/g)||[]).length,3);assert.match(html,/landing-trade-nav-label/);assert.match(html,/landing-trade-nav-select/);assert.doesNotMatch(html,/Choose your trade <span/);assert.match(await readFile(new URL('../public/marketing.js',import.meta.url),'utf8'),/landing-trade-nav-select/);assert.doesNotMatch(html,/Prototype preview/);assert.match(app,/updateLeadEstimate/);assert.match(app,/landing-calc-cta/);assert.match(app,/landing-pricing-cta/);assert.match(app,/Create an account/);
+ assert.match(html,/id="metric-sent"/);assert.match(html,/SENT THIS MONTH/);assert.match(app,/const sentThisMonth = openQuotes\.filter/);assert.match(app,/created\.getFullYear\(\) === today\.getFullYear\(\) && created\.getMonth\(\) === today\.getMonth\(\)/);assert.match(app,/metric-sent.*sentThisMonth\.length/);assert.match(html,/id="customer-review-form"/);assert.match(html,/id="published-customer-reviews"/);assert.match(html,/id="team-panel"/);assert.match(html,/id="referral-panel"/);assert.match(await readFile(new URL('../public/reviews.js',import.meta.url),'utf8'),/api\/customer-reviews/);assert.match(app,/api\/send-quote-email/);assert.match(app,/api\/invoice-checkout/);assert.match(app,/FREE_MONTHLY_QUOTE_LIMIT/);assert.match(await readFile(new URL('../public/reviews.js',import.meta.url),'utf8'),/review\.review_text/);assert.doesNotMatch(app,/review\.customer_email/);
  assert.match(html,/From the first quote to the customer/);assert.match(html,/Follow up before the quote goes quiet/);assert.match(html,/desktop-showcase\.css/);assert.match(desktopCss,/@media \(min-width: 900px\)/);assert.match(desktopCss,/font-size: clamp\(66px, 6\.2vw, 94px\)/);assert.match(desktopCss,/radial-gradient/);assert.match(desktopCss,/landing-pricing-note[\s\S]*margin: 24px auto 54px/);assert.match(upgradeCss,/\.toast\.is-upgrade/);assert.match(upgradeCss,/\.toast\.is-upgrade/);assert.match(upgradeCss,/max-width:720px/);assert.match(app,/upgrade: true/);assert.match(app,/label: 'View Pro plans'/);assert.match(app,/14000/);assert.match(app,/setTimeout\(hideToast, error \? Math\.max\(duration, 8000\) : duration\)/);assert.doesNotMatch(desktopCss,/@media\s*\(max-width:/);assert.match(html,/id="welcome-subtitle"/);assert.match(app,/function updateDeskIntro/);assert.match(app,/check in before a job goes quiet/);
 });
 
-test('dashboard offers distinct monthly and lifetime purchase options',async()=>{
+test('dashboard advertises Solo plan options and the paid $4.99 trial',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
  assert.match(html,/id="upgrade-monthly-link"[^>]*data-plan="monthly"/);
- assert.match(html,/id="upgrade-lifetime-link"[^>]*data-plan="lifetime"/);
+ assert.match(html,/class="solo-pro-actions"><button class="button button-primary" id="landing-pro-monthly-cta"[^>]*>Get Solo Pro[^<]*\$29\/mo<\/button><button class="button button-secondary" id="landing-pro-cta"[^>]*>Start 14-day Pro trial[^<]*\$4\.99/);
+ assert.match(html,/card is required/);
+ assert.match(html,/class="landing-plan-card landing-plan-team"/);
+ assert.match(html,/Crew &amp; Team/);
+ assert.match(html,/\$59 \/ mo/);
+ assert.match(html,/Includes 3 seats/);
+
+ assert.match(html,/id="landing-team-cta"/);
+ assert.match(html,/renews at \$29\/month/);
  const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
- assert.match(app,/\/api\/create-monthly-checkout-session/);
+ assert.match(app,/sessionStorage\.setItem\('eqf-checkout-plan', 'solo_trial'\)/);
+ assert.match(app,/sessionStorage\.setItem\('eqf-checkout-plan', 'solo_monthly'\)/);
+ assert.match(app,/eqf-checkout-plan', 'team_monthly'/);
+ assert.match(app,/beginPlanCheckout/);
+ assert.match(app,/requestedPlan/);
  assert.match(app,/\/api\/create-checkout-session/);
 });
 
@@ -708,6 +720,66 @@ test('monthly checkout route returns the monthly link with account reference',as
  });
 });
 
+test('paid Solo trial creates a card-only $4.99 payment checkout and validates monthly billing prices',async()=>{
+ const seen=[];
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'user@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{is_pro:false}]);
+  if(target==='https://api.stripe.com/v1/prices/price_trial')return Response.json({id:'price_trial',currency:'usd',unit_amount:499,recurring:null});
+  if(target==='https://api.stripe.com/v1/prices/price_monthly')return Response.json({id:'price_monthly',currency:'usd',unit_amount:2900,recurring:{interval:'month',interval_count:1}});
+  if(target==='https://api.stripe.com/v1/checkout/sessions'){seen.push(new URLSearchParams(options.body));return Response.json({url:'https://checkout.stripe.com/c/pay_trial'});}
+  assert.fail('Unexpected upstream '+target);
+ },async()=>{
+  const env={...baseEnv,STRIPE_SECRET_KEY:'sk_test_only',STRIPE_SOLO_MONTHLY_PRICE_ID:'price_monthly',STRIPE_SOLO_TRIAL_FEE_PRICE_ID:'price_trial'};
+  const response=await worker.fetch(jsonRequest('https://app.example/api/create-checkout-session',{plan:'solo_trial'},'POST',{Authorization:'Bearer test-token'}),env);
+  assert.equal(response.status,200);assert.equal((await response.json()).url,'https://checkout.stripe.com/c/pay_trial');
+ });
+ assert.equal(seen.length,1);
+ assert.equal(seen[0].get('mode'),'payment');
+ assert.equal(seen[0].get('payment_method_types[0]'),'card');
+ assert.equal(seen[0].get('customer_creation'),'always');
+ assert.equal(seen[0].get('line_items[0][price]'),'price_trial');
+ assert.equal(seen[0].get('payment_intent_data[setup_future_usage]'),'off_session');
+ assert.equal(seen[0].get('subscription_data[trial_period_days]'),null);
+});
+
+test('direct Solo Pro monthly plan creates its own recurring Stripe checkout',async()=>{
+ const seen=[];
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'user@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{is_pro:false}]);
+  if(target==='https://api.stripe.com/v1/prices/price_monthly')return Response.json({id:'price_monthly',currency:'usd',unit_amount:2900,recurring:{interval:'month',interval_count:1}});
+  if(target==='https://api.stripe.com/v1/checkout/sessions'){seen.push(new URLSearchParams(options.body));return Response.json({url:'https://checkout.stripe.com/c/pay_monthly'});}
+  assert.fail('Unexpected upstream '+target);
+ },async()=>{
+  const env={...baseEnv,STRIPE_SECRET_KEY:'sk_test_only',STRIPE_SOLO_MONTHLY_PRICE_ID:'price_monthly'};
+  const response=await worker.fetch(jsonRequest('https://app.example/api/create-checkout-session',{plan:'solo_monthly'},'POST',{Authorization:'Bearer test-token'}),env);
+  assert.equal(response.status,200);assert.equal((await response.json()).url,'https://checkout.stripe.com/c/pay_monthly');
+ });
+ assert.equal(seen.length,1);assert.equal(seen[0].get('mode'),'subscription');assert.equal(seen[0].get('line_items[0][price]'),'price_monthly');
+ assert.equal(seen[0].get('metadata[billing_plan]'),'solo_monthly');assert.equal(seen[0].get('subscription_data[trial_period_days]'),null);
+});
+
+test('Crew & Team monthly checkout validates its own $59 price and creates separate subscription session',async()=>{
+ const seen=[];
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{is_pro:false}]);
+  if(target==='https://api.stripe.com/v1/prices/price_team')return Response.json({id:'price_team',currency:'usd',unit_amount:5900,recurring:{interval:'month',interval_count:1}});
+  if(target==='https://api.stripe.com/v1/checkout/sessions'){seen.push(new URLSearchParams(options.body));return Response.json({url:'https://checkout.stripe.com/c/team'});}
+  assert.fail('Unexpected '+target);
+ },async()=>{
+  const env={...baseEnv,STRIPE_SECRET_KEY:'sk_test_only',STRIPE_TEAM_MONTHLY_PRICE_ID:'price_team'};
+  const response=await worker.fetch(jsonRequest('https://app.example/api/create-checkout-session',{plan:'team_monthly'},'POST',{Authorization:'Bearer test-token'}),env);
+  assert.equal(response.status,200);assert.equal((await response.json()).url,'https://checkout.stripe.com/c/team');
+ });
+ assert.equal(seen.length,1);assert.equal(seen[0].get('mode'),'subscription');assert.equal(seen[0].get('line_items[0][price]'),'price_team');
+ assert.equal(seen[0].get('metadata[billing_plan]'),'team_monthly');
+});
+
 test('monthly checkout rejects accounts already on Pro',async()=>{
  await withMockedFetch(async url=>String(url).endsWith('/auth/v1/user')?Response.json({id:'user1',email:'user@example.com'}):Response.json([{is_pro:true}]),async()=>{
   const response=await worker.fetch(jsonRequest('https://app.example/api/create-monthly-checkout-session',{plan:'monthly'},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);
@@ -861,14 +933,14 @@ test('signup and Google confirmation mail names Elite Quote Flow and stays on th
  assert.doesNotMatch(sent.text, /supabase\.co/);
 });
 
-test('address suggestions come from the worker and free accounts stop at two quotes and two per network', async () => {
+test('address suggestions come from the worker and free accounts stop at five quotes and two per network', async () => {
  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
  const schema = await readFile(new URL('../supabase-schema.sql', import.meta.url), 'utf8');
- assert.match(html, /Up to 2 open quotes/);
+ assert.match(html, /Up to 5 active quotes per month/);
  assert.doesNotMatch(html, /CSV file|ICS file|VCF file/);
- assert.match(app, /const FREE_OPEN_QUOTE_LIMIT = 2/);
- assert.match(app, /Free access is limited to \$\{FREE_OPEN_QUOTE_LIMIT\} quotes/);
+ assert.match(app, /const FREE_MONTHLY_QUOTE_LIMIT = 5/);
+ assert.match(app, /Starter Desk includes \$\{FREE_MONTHLY_QUOTE_LIMIT\} quotes per month/);
  assert.match(app, /split\(\/\\s\+\/\)/);
  assert.match(app, /\/api\/address-suggest/);
  assert.match(app, /\/api\/account-slot/);

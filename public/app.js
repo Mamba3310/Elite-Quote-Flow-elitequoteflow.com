@@ -4,14 +4,21 @@
   const STORAGE_KEY = 'quoteflow.quotes.v1';
   const CALCULATOR_CURRENCY_KEY = 'calculator-currency';
   const VISITOR_CURRENCY_KEY = 'quoteflow.visitor-currency';
-  const FREE_OPEN_QUOTE_LIMIT = 2;
-  const FREE_LINE_ITEM_LIMIT = 1;
+  const FREE_MONTHLY_QUOTE_LIMIT = 5;
+
   const PRO_LINE_ITEM_LIMIT = 20;
   const SUPABASE_CONFIG = window.QUOTEFlow_SUPABASE_CONFIG;
   const CURRENCIES = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD', 'NZD', 'CHF', 'JPY', 'CNY', 'INR', 'MXN', 'BRL', 'ZAR', 'SGD', 'HKD', 'SEK', 'NOK', 'DKK', 'PLN'];
   const isPro = () => Boolean(profile.isPro);
   const openQuoteCount = () => quotes.filter(quote => quote.status === 'sent').length;
-  const lineItemLimit = () => (isPro() ? PRO_LINE_ITEM_LIMIT : FREE_LINE_ITEM_LIMIT);
+  const monthlyQuoteCount = () => {
+    const now = new Date();
+    return quotes.filter(quote => {
+      const created = new Date(quote.createdAt || 0);
+      return Number.isFinite(created.getTime()) && created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth();
+    }).length;
+  };
+  const lineItemLimit = () => PRO_LINE_ITEM_LIMIT;
   const requirePro = (feature) => {
     if (isPro()) return true;
     showToast(`${feature} is included with Pro. Upgrade from your Pro Desk to unlock it.`, 14000, {
@@ -390,12 +397,12 @@
     const eyebrow = document.querySelector('#upgrade-strip .eyebrow');
     if (eyebrow) eyebrow.textContent = profile.isStaff ? 'STAFF REVIEW' : 'ELITE QUOTE FLOW PRO';
     $('#pro-upgrade-title').textContent = profile.isStaff ? 'Staff review access is active. Pro tools are open for cross-checking the desk.' : profile.isPro ? 'Your Pro Desk is active, from follow-up through getting paid.' : 'Keep follow-ups, deposits, and branded email moving on Pro.';
-    const openCount = openQuoteCount();
+
     $('#pro-upgrade-copy').textContent = profile.isStaff
       ? 'Pro tools are unlocked so your team can cross-check quotes, email, and the rest of the desk. This is not a paid subscription.'
       : profile.isPro
       ? profile.isLifetime ? 'Your one-time purchase gives you permanent access to all Pro tools.' : 'Your Pro tools are ready. Manage billing or cancel your subscription securely.'
-      : `Free tracks open quote value and recovered wins after a follow-up date. Pro adds automated reminders, deposits, branded email, multi-item quotes, AI drafting, exports, teams, and invoice collection · $14.99/mo or $149.99 lifetime. Checkout can show a local estimate; the charge stays in US dollars. You have ${openCount}/${FREE_OPEN_QUOTE_LIMIT} open quotes.`;
+      : `Starter Desk includes five quotes per month and unlimited line items. Solo Pro is $29/month or $249/year. The $4.99 Pro trial requires a card and renews at $29/month after 14 days unless canceled. You have ${monthlyQuoteCount()}/${FREE_MONTHLY_QUOTE_LIMIT} quotes this month.`;
     const monthlyButton = $('#upgrade-monthly-link');
     const lifetimeButton = $('#upgrade-lifetime-link');
     const manageButton = $('#upgrade-pro-link');
@@ -403,7 +410,7 @@
     lifetimeButton.hidden = Boolean(profile.isPro);
     manageButton.hidden = profile.isStaff || !profile.isPro || Boolean(profile.isLifetime);
     manageButton.textContent = 'Manage subscription';
-    lifetimeButton.textContent = profile.isLifetime ? 'Lifetime Pro active' : 'Lifetime · $149.99';
+    lifetimeButton.textContent = profile.isLifetime ? 'Legacy Lifetime Pro active' : 'Annual · $249';
     lifetimeButton.disabled = Boolean(profile.isLifetime);
     if (profile.isLifetime) lifetimeButton.setAttribute('aria-disabled', 'true');
     else lifetimeButton.removeAttribute('aria-disabled');
@@ -425,7 +432,7 @@
     const freeLimitNote = $('#free-limit-note');
     if (freeLimitNote) {
       freeLimitNote.hidden = Boolean(profile.isPro);
-      freeLimitNote.textContent = `Free access is limited to ${FREE_OPEN_QUOTE_LIMIT} quotes. You have ${openCount} of ${FREE_OPEN_QUOTE_LIMIT}. Upgrade for deposits, reminders, branding, and more.`;
+      freeLimitNote.textContent = `Starter Desk includes ${FREE_MONTHLY_QUOTE_LIMIT} quotes per month and unlimited line items. You have ${monthlyQuoteCount()} of ${FREE_MONTHLY_QUOTE_LIMIT} quotes this month. Upgrade for deposits, reminders, branding, and more.`;
     }
     $('#header-profile-name').textContent = name;
     $('#header-profile-name').title = name;
@@ -1335,6 +1342,11 @@
           await loadCalculatorPreferences(nextUser.id);
           await initializeOwnerAnalytics();
           await refreshQuotes();
+          const pendingPlan = sessionStorage.getItem('eqf-checkout-plan');
+          if (pendingPlan) {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (await beginPlanCheckout(session?.access_token, pendingPlan)) sessionStorage.removeItem('eqf-checkout-plan');
+          }
           offerLocalImport();
         }, 0);
       }
@@ -1972,7 +1984,7 @@
       button.innerHTML = original;
     }
   }
-  $('#upgrade-monthly-link').addEventListener('click', event => startBillingAction(event.currentTarget, '/api/create-monthly-checkout-session', { plan: 'monthly' }));
+  $('#upgrade-monthly-link').addEventListener('click', event => startBillingAction(event.currentTarget, '/api/create-checkout-session', { plan: 'solo_monthly' }));
   $('#upgrade-lifetime-link').addEventListener('click', event => startBillingAction(event.currentTarget, '/api/create-checkout-session', { plan: 'lifetime' }));
   $('#upgrade-pro-link').addEventListener('click', event => startBillingAction(event.currentTarget, '/api/create-portal-session', {}));
   $('#invite-button').addEventListener('click', async () => {
@@ -2170,9 +2182,8 @@
     };
     if (values.taxRate > 100 || values.discountAmount < 0 || values.depositPercent > 100) return showToast('Tax and deposit percentages must be 0–100, and discount cannot be negative.');
     if (!isPro() && values.depositPercent > 0) return requirePro('Deposit collection');
-    if (!isPro() && values.lineItems.length > FREE_LINE_ITEM_LIMIT) return requirePro('Multiple quote line items');
-    if (!editingId && !isPro() && openQuoteCount() >= FREE_OPEN_QUOTE_LIMIT) {
-      return requirePro(`More than ${FREE_OPEN_QUOTE_LIMIT} open quotes`);
+    if (!editingId && !isPro() && monthlyQuoteCount() >= FREE_MONTHLY_QUOTE_LIMIT) {
+      return requirePro(`More than ${FREE_MONTHLY_QUOTE_LIMIT} quotes this month`);
     }
     let firstInvalid = null;
     Object.entries(errors).forEach(([name, message]) => {
@@ -2558,6 +2569,25 @@
     showToast(`Exported ${contacts.size} contacts as VCF.`);
   });
 
+  async function beginPlanCheckout(accessToken, plan) {
+    if (!accessToken) return false;
+    try {
+      const checkout = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ plan })
+      });
+      const result = await checkout.json();
+      if (!checkout.ok || !result.url) throw new Error(result.error || 'Paid trial checkout is not configured yet.');
+      window.location.assign(result.url);
+      return true;
+    } catch (error) {
+      $('#register-error').textContent = error.message || 'Could not open secure checkout.';
+      $('#register-error').hidden = false;
+      return false;
+    }
+  }
+
   registerForm.addEventListener('submit', async event => {
     event.preventDefault();
     if (!supabaseClient) {
@@ -2598,6 +2628,13 @@
       }
       $('#register-error').classList.remove('is-success');
       $('#register-error').hidden = true;
+      const requestedPlan = sessionStorage.getItem('eqf-checkout-plan');
+      if (requestedPlan) {
+        if (await beginPlanCheckout(data.session.access_token, requestedPlan)) {
+          sessionStorage.removeItem('eqf-checkout-plan');
+          return;
+        }
+      }
       showToast('Account created. Welcome to Elite Quote Flow.');
     } catch (error) {
       $('#register-error').textContent = error.message || 'Could not create your account.';
@@ -2687,7 +2724,18 @@
   $('#landing-start').addEventListener('click', showRegistration);
   $('#landing-create').addEventListener('click', showRegistration);
   ['landing-calc-cta','landing-steps-cta','landing-pricing-cta'].forEach(id => document.getElementById(id)?.addEventListener('click', showRegistration));
-  $('#landing-pro-cta').addEventListener('click', showRegistration);
+  $('#landing-pro-cta').addEventListener('click', () => {
+    sessionStorage.setItem('eqf-checkout-plan', 'solo_trial');
+    showRegistration();
+  });
+  $('#landing-pro-monthly-cta').addEventListener('click', () => {
+    sessionStorage.setItem('eqf-checkout-plan', 'solo_monthly');
+    showRegistration();
+  });
+  $('#landing-team-cta').addEventListener('click', () => {
+    sessionStorage.setItem('eqf-checkout-plan', 'team_monthly');
+    showRegistration();
+  });
   const updateLeadEstimate = () => {
     const quotes = Math.max(0, Math.min(10000, Number($('#lead-calc-quotes').value) || 0));
     const amount = Math.max(0, Math.min(100000000, Number($('#lead-calc-amount').value) || 0));
