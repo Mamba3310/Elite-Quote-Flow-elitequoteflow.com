@@ -3,7 +3,7 @@ import additionalTrades from './additional-trades.js';
 const path='public/index.html';
 let html=await readFile(path,'utf8');
 const slugs=['landscaping','plumbing','electrical','hvac','painting','house-cleaning','roofing','handyman','pest-control','flooring','remodeling','pressure-washing','pool-service','moving','auto-detailing',...additionalTrades.map(trade=>trade.slug)];
-const directory=`<section class="landing-trades" id="trades" aria-labelledby="landing-trades-title"><div class="landing-section-heading"><p class="eyebrow">BUILT FOR ESTIMATE-BASED SERVICE WORK</p><h2 id="landing-trades-title">Find your trade’s quote workflow.</h2><p>Choose from ${slugs.length} service trades to view an illustrative estimate and follow-up workflow, using localized terms and currencies where suitable.</p></div><p class="trade-directory-all"><a href="/trades">Choose from all ${slugs.length} trade examples in the directory →</a></p></section>`;
+const directory=`<section class="landing-trades" id="trades" aria-labelledby="landing-trades-title"><div class="landing-section-heading"><p class="eyebrow">BUILT FOR ESTIMATE-BASED SERVICE WORK</p><h2 id="landing-trades-title">Find your trade’s quote workflow.</h2><p>Choose a service to explore its quote workflow, common job items, and follow-up steps.</p></div><p class="trade-directory-all"><a href="/trades">Choose from all ${slugs.length} trade examples in the directory →</a></p></section>`;
 const start=html.indexOf('<section class="landing-trades"');
 const end=start<0?-1:html.indexOf('</section>',start)+('</section>'.length);
 if(start<0||end<('</section>'.length))throw new Error('Cannot locate existing trade directory section');

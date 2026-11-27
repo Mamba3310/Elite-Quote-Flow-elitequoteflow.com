@@ -196,7 +196,7 @@ test('marketing routes serve all generated trade pages and crawl files',async()=
  const extraTrades=await import('../scripts/additional-trades.js');
  const baseTrades=['landscaping','plumbing','electrical','hvac','painting','house-cleaning','roofing','handyman','pest-control','flooring','remodeling','pressure-washing','pool-service','moving','auto-detailing'];
  const trades=[...baseTrades,...extraTrades.default.map(trade=>trade.slug)];
- for(const slug of trades){const response=await responseFor(`/${slug}`);const body=await response.text();assert.equal(response.status,200,slug);assert.match(body,/Illustrative quote example/i,slug);assert.match(body,new RegExp(`canonical.*${slug}`),slug)}
+ for(const slug of trades){const response=await responseFor(`/${slug}`);const body=await response.text();assert.equal(response.status,200,slug);assert.match(body,/QUOTE EXAMPLE/i,slug);assert.match(body,new RegExp(`canonical.*${slug}`),slug)}
  const directory=await responseFor('/trades');const directoryHtml=await directory.text();assert.match(directoryHtml,/Explore quote examples for 65 service trades/i);assert.match(directoryHtml,/trade-directory-select/);assert.equal((directoryHtml.match(/<option value="\//g)||[]).length,130);assert.equal((directoryHtml.match(/<article><a href="\//g)||[]).length,65);
  const sitemap=await responseFor('/sitemap.xml');const xml=await sitemap.text();for(const slug of trades)assert.match(xml,new RegExp(`https://elitequoteflow\\.com/${slug}`));
  const robots=await responseFor('/robots.txt');assert.match(await robots.text(),/Sitemap: https:\/\/elitequoteflow.com\/sitemap.xml/);
