@@ -1,0 +1,79 @@
+/* Desktop-only landing and trade-page visual expansion. Mobile styles remain unchanged. */
+@media (min-width: 900px) {
+  .landing-screen { background: radial-gradient(ellipse at 82% 16%, #536ed455 0, transparent 33%), radial-gradient(ellipse at 12% 55%, #c9903526 0, transparent 32%), linear-gradient(180deg, #090c12 0%, #101722 52%, #090c12 100%); }
+  .landing-nav { width: min(100%, 1480px); height: 98px; padding: 0 56px; border-bottom-color: #d6b97840; }
+  .landing-nav .brand { gap: 13px; font-size: 22px; }
+  .landing-nav .brand-mark { width: 46px; height: 46px; border-radius: 13px; }
+  .landing-nav > div { gap: 16px; }
+  .landing-nav .landing-trade-nav-label { gap: 10px; padding: 8px 11px; border-color: #806e49; background: #171a20; font-size: 11px; }
+  .landing-nav .landing-trade-nav-select { max-width: 220px; min-height: 38px; padding-inline: 11px; border-color: #657da8; font-size: 12px; }
+  .landing-nav .landing-signin-button { min-height: 46px; padding-inline: 19px; font-size: 13px; }
+  .landing-nav #landing-start { min-height: 46px; padding-inline: 21px; font-size: 13px; }
+  .landing-hero { width: min(100%, 1400px); min-height: 770px; grid-template-columns: minmax(0, 1.04fr) minmax(480px, .96fr); gap: clamp(72px, 8vw, 126px); padding: 98px 56px 92px; }
+  .landing-copy > .eyebrow { width: max-content; padding: 10px 15px; border: 1px solid #d9bb7059; border-radius: 999px; background: linear-gradient(90deg, #c4903224, #718bd02a); color: #f0d28b; font-size: 12px; letter-spacing: 2px; }
+  .landing-copy h1 { max-width: 760px; margin: 28px 0 24px; font-size: clamp(66px, 6.2vw, 94px); line-height: .99; letter-spacing: -5px; }
+  .landing-copy > p:not(.eyebrow) { max-width: 690px; color: #c0cadd; font-size: 19px; line-height: 1.78; }
+  .landing-actions { gap: 16px; margin-top: 34px; }
+  .landing-actions .button { min-height: 58px; padding-inline: 24px; border-radius: 10px; font-size: 14px; }
+  .landing-actions .landing-link { padding: 12px 15px; border: 1px solid #52678a; border-radius: 9px; background: #151d2b; color: #e0e8f6; font-size: 12px; }
+  .landing-actions .landing-link:hover { border-color: #dec47b; background: #242232; color: #fff; }
+  .landing-no-card { margin-top: 14px !important; font-size: 12px !important; }
+  .landing-trust { gap: 11px; margin-top: 32px; }
+  .landing-trust span { padding: 11px 14px; border-color: #46536d; border-radius: 999px; background: linear-gradient(120deg, #182334, #181b24); color: #d1dbec; font-size: 11px; }
+  .landing-preview { padding: 34px; border-color: #657996; border-radius: 22px; background: radial-gradient(ellipse at 100% 0, #bc8b3a2b, transparent 42%), linear-gradient(150deg, #1c2940, #10141c 82%); box-shadow: 0 42px 110px #000a, 0 0 0 7px #ffffff08, 0 0 92px #6280cf30; }
+  .landing-preview::before { border-radius: 22px; background: linear-gradient(135deg, #e6c77e66, transparent 36%, #8298cf24 70%, transparent); }
+  .preview-top { gap: 12px; font-size: 10px; }
+  .preview-mark { width: 43px; height: 36px; font-size: 11px; }
+  .preview-heading { margin: 30px 0 20px; font-size: 23px; }
+  .preview-metrics { gap: 13px; }
+  .preview-metrics > div { gap: 12px; padding: 22px; border-color: #46556e; border-radius: 12px; background: #111925; }
+  .preview-metrics small { font-size: 10px; letter-spacing: 1px; }
+  .preview-metrics strong { font-size: 28px; }
+  .preview-quote { min-height: 74px; gap: 14px; margin-top: 13px; padding: 17px; border-color: #424e64; border-radius: 11px; background: linear-gradient(110deg, #182333, #121720); }
+  .preview-avatar { width: 42px; height: 42px; border-radius: 12px; font-size: 11px; }
+  .preview-quote > div strong, .preview-next strong { font-size: 13px; }
+  .preview-quote > div small, .preview-next small { font-size: 11px; }
+  .preview-amount { font-size: 14px; }
+  .preview-next { gap: 14px; margin-top: 17px; padding: 19px; border-color: #a2844d99; border-radius: 11px; background: linear-gradient(105deg, #33291b, #1a2333); font-size: 17px; }
+  .landing-proof { max-width: 1270px; gap: 18px; margin: 0 auto 34px; padding: 0 56px; }
+  .landing-proof article { min-height: 72px; gap: 16px; padding: 18px 22px; border-color: #46536b; border-radius: 12px; background: linear-gradient(115deg, #171e2b, #111720); box-shadow: 0 12px 32px #0006; }
+  .landing-proof article strong { color: #f0d28b; font-size: 21px; }
+  .landing-proof article span { font-size: 13px; }
+  .landing-offer, .landing-trades, .landing-reviews { max-width: 1320px; padding: 58px 56px 86px; }
+  .landing-section-heading { max-width: 820px; margin-bottom: 38px; }
+  .landing-section-heading > .eyebrow { color: #e5c87f; font-size: 12px; letter-spacing: 2px; }
+  .landing-section-heading h2 { font-size: clamp(34px, 3vw, 46px); letter-spacing: -1.6px; }
+  .landing-section-heading > p:last-child { font-size: 16px; line-height: 1.75; }
+  .landing-offer .landing-features { gap: 20px; }
+  .landing-offer .landing-features article { min-height: 210px; padding: 28px; border-color: #394961; border-radius: 14px; background: linear-gradient(145deg, #182231, #111720); box-shadow: 0 18px 44px #0005; }
+  .landing-offer .landing-features article > span { color: #e5c87f; font-size: 11px; }
+  .landing-offer .landing-features article h3 { margin: 15px 0 10px; font-size: 19px; }
+  .landing-offer .landing-features article p { font-size: 14px; line-height: 1.75; }
+  .landing-calculator, .landing-steps, .landing-pricing { max-width: 1240px; padding: 56px 56px 78px; }
+  .lead-calculator { max-width: 1100px; gap: 26px; padding: 28px; border-color: #596e8f; border-radius: 17px; background: linear-gradient(145deg, #19253a, #10151f); box-shadow: 0 28px 70px #0008, 0 0 55px #5273bb28; }
+  .lead-calculator-fields { gap: 17px; }
+  .lead-calculator-fields label { gap: 9px; font-size: 12px; }
+  .lead-calculator-fields input { min-height: 48px; padding: 11px 13px; border-color: #455570; border-radius: 8px; font-size: 14px; }
+  .lead-calculator-result { padding: 24px; border-color: #9b7e4e; border-radius: 12px; background: linear-gradient(155deg, #252117, #11151c); }
+  .lead-calculator-result > strong { font-size: 48px; }
+  .lead-calculator-result > p:not(.eyebrow) { font-size: 13px; }
+  .landing-step-grid { gap: 18px; }
+  .landing-step-grid article { padding: 25px; border-color: #39475f; border-radius: 13px; background: linear-gradient(145deg, #171f2d, #111720); }
+  .landing-step-grid article > span { width: 40px; height: 40px; font-size: 17px; }
+  .landing-step-grid h3 { font-size: 18px; }
+  .landing-step-grid p { font-size: 13px; }
+  .landing-pricing-grid { max-width: 1080px; gap: 24px; }
+  .landing-plan-card { min-height: 390px; padding: 32px; border-color: #506381; border-radius: 16px; background: linear-gradient(150deg, #1a2535, #111720); box-shadow: 0 22px 55px #0007; }
+  .landing-plan-pro { border-color: #d0ad5e; box-shadow: 0 0 0 1px #d0ad5e66, 0 22px 60px #0008, 0 0 45px #d0ad5e1f; }
+  .landing-plan-label { color: #e7ca83; font-size: 11px; letter-spacing: 1.5px; }
+  .landing-plan-card h3 { font-size: 24px; }
+  .landing-plan-price { font-size: 30px; }
+  .landing-plan-list { font-size: 14px; line-height: 1.85; }
+  .landing-plan-card .button { min-height: 50px; padding-inline: 19px; border-radius: 9px; font-size: 13px; }
+  .landing-pricing-note { font-size: 11px; }
+  .trade-directory-all { margin-top: 27px; }
+  .trade-directory-all a { font-size: 14px; }
+  .landing-review-grid { gap: 20px; }
+  .landing-review-card { min-height: 250px; padding: 30px; border-color: #3b4964; border-radius: 14px; background: linear-gradient(145deg, #182130, #111720); }
+  .landing-review-card blockquote { font-size: 16px; line-height: 1.8; }
+}
