@@ -14,7 +14,13 @@
   const lineItemLimit = () => (isPro() ? PRO_LINE_ITEM_LIMIT : FREE_LINE_ITEM_LIMIT);
   const requirePro = (feature) => {
     if (isPro()) return true;
-    showToast(`${feature} is included with Pro. Upgrade from your Pro Desk to unlock it.`, 6000);
+    showToast(`${feature} is included with Pro. Upgrade from your Pro Desk to unlock it.`, 14000, {
+      upgrade: true,
+      action: {
+        label: 'View Pro plans',
+        onClick: () => $('#upgrade-strip')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    });
     $('#upgrade-strip')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return false;
   };
@@ -1525,6 +1531,7 @@
       toast.append(button);
     }
     toast.classList.toggle('is-error', error);
+    toast.classList.toggle('is-upgrade', options.upgrade === true);
     toast.classList.add('is-visible');
     if (typeof toast.showPopover === 'function') {
       try { if (!toast.matches(':popover-open')) toast.showPopover(); } catch { /* The notice is already in the top layer. */ }
