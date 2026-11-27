@@ -1148,6 +1148,7 @@
     renderList('#analytics-sources', data.sources || [], 'No referrers yet');
     renderList('#analytics-countries', data.countries || [], 'No country data yet');
     renderList('#analytics-decisions-by-country', data.decisionsByCountry || [], 'No quote decisions in the last 24 hours', item => `${item.country} · ${item.decision}: ${item.count}`);
+    renderList('#analytics-funnel', data.funnel || [], 'No tracked funnel events yet', item => `${item.stage} · ${item.path}${item.action ? ` · ${item.action}` : ''}: ${item.count}`);
   }
 
   async function loadOwnerAnalytics() {
@@ -2663,6 +2664,11 @@
   });
 
   $('#landing-signin').addEventListener('click', () => showSignedOut('signin'));
+  const walkthrough = $('#product-walkthrough');
+  $('#landing-demo-video').addEventListener('click', () => walkthrough.showModal());
+  $('#walkthrough-close').addEventListener('click', () => walkthrough.close());
+  $('#walkthrough-start').addEventListener('click', () => { walkthrough.close(); showRegistration(); });
+  walkthrough.addEventListener('click', event => { if (event.target === walkthrough) walkthrough.close(); });
   $('#landing-demo').addEventListener('click', () => showSignedOut('signin'));
   $('#landing-start').addEventListener('click', showRegistration);
   $('#landing-create').addEventListener('click', showRegistration);
@@ -3085,43 +3091,7 @@
   $('#help-nudge-open')?.addEventListener('click', () => { helpNudge.hidden = true; supportDialog.showModal(); });
   $('#support-close').addEventListener('click', () => supportDialog.close());
   supportDialog.addEventListener('click', event => { if (event.target === supportDialog) supportDialog.close(); });
-  async function loadPublishedCustomerReviews() {
-    const target = $('#published-customer-reviews');
-    try {
-      const response = await fetch('/api/customer-reviews');
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Reviews are temporarily unavailable.');
-      target.replaceChildren();
-      if (!result.reviews?.length) { const empty = document.createElement('p'); empty.className = 'review-loading'; empty.textContent = 'Be the first to share your experience.'; target.append(empty); return; }
-      result.reviews.forEach(review => {
-        const card = document.createElement('article'); card.className = 'landing-review-card';
-        const stars = document.createElement('span'); stars.className = 'landing-benefit-icon review-stars'; stars.setAttribute('aria-label', `${review.rating} out of 5 stars`); stars.textContent = '★'.repeat(review.rating);
-        const quote = document.createElement('blockquote'); quote.textContent = `“${review.review_text}”`;
-        const author = document.createElement('p'); author.className = 'review-author'; author.textContent = `${review.customer_name} · ${review.business_name}`;
-        card.append(stars, quote, author); target.append(card);
-      });
-    } catch { target.textContent = 'Customer reviews are temporarily unavailable.'; }
-  }
-  loadPublishedCustomerReviews();
-  $('#customer-review-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const status = $('#customer-review-status');
-    const button = $('#customer-review-submit');
-    status.textContent = '';
-    button.disabled = true;
-    button.textContent = 'Submitting…';
-    try {
-      const fields = Object.fromEntries(new FormData(form));
-      const response = await fetch('/api/customer-reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Review could not be submitted.');
-      status.textContent = result.message || 'Thank you for sharing your experience.';
-      form.reset();
-      await loadPublishedCustomerReviews();
-    } catch (error) { status.textContent = error.message || 'Could not submit your review. Please try again later.'; }
-    finally { button.disabled = false; button.textContent = 'Submit review'; }
-  });
+  // Public review rendering is loaded separately in reviews.js, independently of dashboard initialization.
   $('#support-form').addEventListener('submit', async event => {
     event.preventDefault();
     const input = $('#support-input');

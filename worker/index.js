@@ -43,9 +43,19 @@ export default {
     }
     if (url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/')) return onAdminApi(request, env);
     if (url.pathname === '/api/public-booking') return onPublicBooking(request, env);
-    if (url.pathname === '/landscaping' || url.pathname === '/landscapers') {
+    if (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml') {
       if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed.', { status: 405, headers: { Allow: 'GET, HEAD' } });
-      const assetUrl = new URL('/landscaping.html', url.origin);
+      const response = await env.ASSETS.fetch(new Request(new URL(url.pathname, url.origin), { method: 'GET', headers: request.headers }));
+      const headers = new Headers(response.headers);
+      headers.set('Cache-Control', 'public, max-age=3600');
+      for (const [name, value] of Object.entries(secureHeaders)) headers.set(name, value);
+      return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, statusText: response.statusText, headers });
+    }
+    const tradePages = new Set(['landscaping', 'plumbing', 'electrical', 'hvac', 'painting', 'house-cleaning', 'roofing', 'handyman', 'pest-control', 'flooring', 'remodeling', 'pressure-washing', 'pool-service', 'moving', 'auto-detailing']);
+    if (url.pathname === '/trades' || url.pathname === '/landscaping' || url.pathname === '/landscapers' || tradePages.has(url.pathname.slice(1))) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed.', { status: 405, headers: { Allow: 'GET, HEAD' } });
+      const pageName = url.pathname === '/trades' ? 'trades' : (url.pathname === '/landscapers' ? 'landscaping' : url.pathname.slice(1));
+      const assetUrl = new URL(`/${pageName}.html`, url.origin);
       const assetRequest = new Request(assetUrl, { method: 'GET', headers: request.headers });
       const assetResponse = await env.ASSETS.fetch(assetRequest);
       const headers = new Headers(assetResponse.headers);
