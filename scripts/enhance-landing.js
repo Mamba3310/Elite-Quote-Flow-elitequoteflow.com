@@ -1,11 +1,17 @@
 import { readFile, writeFile } from 'node:fs/promises';
-
-const path = 'public/index.html';
-let html = await readFile(path, 'utf8');
-const directory = `<section class="landing-trades" id="trades" aria-labelledby="landing-trades-title"><div class="landing-section-heading"><p class="eyebrow">BUILT FOR ESTIMATE-BASED SERVICE WORK</p><h2 id="landing-trades-title">See your trade in the workflow.</h2><p>Explore a tailored example for 15 service businesses. Quote amounts are illustrative, not market-price guidance.</p></div><div class="trade-directory-grid">${['landscaping','plumbing','electrical','hvac','painting','house-cleaning','roofing','handyman','pest-control','flooring','remodeling','pressure-washing','pool-service','moving','auto-detailing'].map(slug => { const title = slug.split('-').map(word => word[0].toUpperCase() + word.slice(1)).join(' '); return `<a href="/${slug}" class="trade-directory-link" data-funnel-stage="trade_directory_click"><strong>${title}</strong><span>View example quote ↗</span></a>`; }).join('')}</div><p class="trade-directory-all"><a href="/trades">Browse all 15 trade examples →</a></p></section>`;
-if (!html.includes('id="landing-trades-title"')) html = html.replace('<section class="landing-reviews"', `${directory}<section class="landing-reviews"`);
-html = html.replace('<p>Read real customer feedback when available. No sample or invented reviews are displayed.</p>', '<p>Real customer feedback from published submissions. No invented testimonials.</p>');
-html = html.replace('<p class="review-loading">Loading customer reviews.</p>', '<p class="review-loading">Loading customer reviews…</p>');
-html = html.replace('<footer class="landing-footer">', '<a class="landing-link landing-footer-trades" href="/trades">Explore quote examples for 15 service trades</a><footer class="landing-footer">');
-await writeFile(path, html, 'utf8');
-console.log('Added the 15-trade directory to the landing page.');
+import additionalTrades from './additional-trades.js';
+const path='public/index.html';
+let html=await readFile(path,'utf8');
+const slugs=['landscaping','plumbing','electrical','hvac','painting','house-cleaning','roofing','handyman','pest-control','flooring','remodeling','pressure-washing','pool-service','moving','auto-detailing',...additionalTrades.map(trade=>trade.slug)];
+const directory=`<section class="landing-trades" id="trades" aria-labelledby="landing-trades-title"><div class="landing-section-heading"><p class="eyebrow">BUILT FOR ESTIMATE-BASED SERVICE WORK</p><h2 id="landing-trades-title">Find your trade’s quote workflow.</h2><p>Choose from ${slugs.length} service trades to view an illustrative estimate and follow-up workflow, using localized terms and currencies where suitable.</p></div><p class="trade-directory-all"><a href="/trades">Choose from all ${slugs.length} trade examples in the directory →</a></p></section>`;
+const start=html.indexOf('<section class="landing-trades"');
+const end=start<0?-1:html.indexOf('</section>',start)+('</section>'.length);
+if(start<0||end<('</section>'.length))throw new Error('Cannot locate existing trade directory section');
+html=html.slice(0,start)+directory+html.slice(end);
+html=html.replace('href="/trades">Explore quote examples for 15 service trades',`href="/trades">Explore quote examples for ${slugs.length} service trades`);
+const navMarker='<a class="landing-link landing-trades-link" href="/trades">Choose your trade <span aria-hidden="true">⌄</span></a>';
+const navDropdown=`<label class="landing-trade-nav-label" for="landing-trade-select"><span>Choose your trade</span><select id="landing-trade-select" class="landing-trade-nav-select" aria-label="Choose a trade"><option value="">Select trade…</option>${slugs.map(slug=>`<option value="/${slug}">${slug.split('-').map(word=>word[0].toUpperCase()+word.slice(1)).join(' ')}</option>`).join('')}</select></label>`;
+if(html.includes(navMarker)) html=html.replace(navMarker,navDropdown);
+else if(!html.includes('id="landing-trade-select"')) throw new Error('Missing landing-page trade selector insertion point');
+await writeFile(path,html,'utf8');
+console.log(`Updated the landing-page directory and selector for ${slugs.length} trades.`);

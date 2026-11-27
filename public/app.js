@@ -2664,6 +2664,13 @@
   });
 
   $('#landing-signin').addEventListener('click', () => showSignedOut('signin'));
+  document.querySelectorAll('.landing-trade-nav-select').forEach(select => select.addEventListener('change', event => {
+    const destination = event.currentTarget.value;
+    if (destination) {
+      window.EliteQuoteFlowMarketing?.funnelEvent('trade_directory_click', { action: destination });
+      window.location.assign(destination);
+    }
+  }));
   const walkthrough = $('#product-walkthrough');
   $('#landing-demo-video').addEventListener('click', () => walkthrough.showModal());
   $('#walkthrough-close').addEventListener('click', () => walkthrough.close());

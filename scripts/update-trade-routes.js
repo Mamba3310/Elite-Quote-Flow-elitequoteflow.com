@@ -1,0 +1,13 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import additionalTrades from './additional-trades.js';
+const baseSlugs=['landscaping','plumbing','electrical','hvac','painting','house-cleaning','roofing','handyman','pest-control','flooring','remodeling','pressure-washing','pool-service','moving','auto-detailing'];
+const slugs=[...baseSlugs,...additionalTrades.map(x=>x.slug)];
+const path='worker/index.js';
+let source=await readFile(path,'utf8');
+const start=source.indexOf('    const tradePages = new Set([');
+const end=source.indexOf(']);',start);
+if(start<0||end<0)throw new Error('Cannot locate Worker trade route set');
+const replacement=`    const tradePages = new Set([${slugs.map(x=>`'${x}'`).join(', ')}]);`;
+source=source.slice(0,start)+replacement+source.slice(end+3);
+await writeFile(path,source,'utf8');
+console.log(`Updated Worker route allowlist with ${slugs.length} trade slugs.`);

@@ -30,11 +30,19 @@
     }, 20500);
   };
   stageStart();
+  document.querySelectorAll('.landing-trade-nav-select')?.forEach(select => select.addEventListener('change', event => {
+    const destination = event.currentTarget.value;
+    if (destination) {
+      funnelEvent('trade_directory_click', { action: destination });
+      window.location.assign(destination);
+    }
+  }));
+
   if (path === '/') {
     document.getElementById('landing-create')?.addEventListener('click', () => funnelEvent('signup_click'));
     document.getElementById('landing-start')?.addEventListener('click', () => funnelEvent('signup_click'));
     ['landing-calc-cta', 'landing-steps-cta', 'landing-pricing-cta', 'landing-pro-cta'].forEach(id => byId(id)?.addEventListener('click', () => funnelEvent('signup_click', { action: id })));
-    document.querySelectorAll('.landing-nav a[href^="/landscaping"], .trade-directory-link').forEach(link => link.addEventListener('click', () => funnelEvent('trade_directory_click')));
+    document.querySelectorAll('.trade-directory-link').forEach(link => link.addEventListener('click', () => funnelEvent('trade_directory_click')));
   }
   document.getElementById('register-form')?.addEventListener('submit', () => funnelEvent('signup_submit'));
   document.getElementById('auth-form')?.addEventListener('submit', () => funnelEvent('signin_submit'));
