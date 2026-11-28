@@ -444,6 +444,7 @@ test('deposit endpoint refuses unauthenticated callers, free users, and mismatch
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'u1'});
   if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'u1',is_pro:false}]);
+  if(target.endsWith('/rpc/get_team_entitlement'))return Response.json(null);
   assert.fail(`Unexpected ${target}`);
  },async()=>{
   const response=await worker.fetch(jsonRequest('https://app.example/api/deposit-checkout',{quoteId:id,publicToken:id},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);assert.equal(response.status,402);
@@ -452,6 +453,7 @@ test('deposit endpoint refuses unauthenticated callers, free users, and mismatch
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'u1'});
   if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'u1',is_pro:true}]);
+  if(target.endsWith('/rpc/get_team_entitlement'))return Response.json(null);
   return Response.json([{id,public_token:'550e8400-e29b-41d4-a716-446655440001',deposit_percent:10}]);
  },async()=>{
   const response=await worker.fetch(jsonRequest('https://app.example/api/deposit-checkout',{quoteId:id,publicToken:id},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);assert.equal(response.status,404);
@@ -656,6 +658,7 @@ test('staff review accounts can use Pro actions without a paid subscription',asy
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
   if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:false,business_name:'Acme',full_name:'Alex Owner'}]);
+  if(target.endsWith('/rpc/get_team_entitlement'))return Response.json(null);
   if(target.includes('/rest/v1/quotes?'))return Response.json([{id,customer:'Casey',email:'casey@example.com',service:'Repair',amount:200,currency:'USD',public_token:id}]);
   if(target==='https://api.resend.com/emails'){const body=JSON.parse(options.body);assert.equal(body.from,'Acme <acme@example.com>');assert.equal(body.reply_to,'owner@example.com');return Response.json({id:'email_staff'});}
   assert.fail(`Unexpected ${target}`);
@@ -675,17 +678,18 @@ test('teams invite and referral endpoints create Pro collaboration records',asyn
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
   if(target.includes('/rest/v1/profiles?id=eq.user1')&&!options.method)return Response.json([{id:'user1',is_pro:true,business_name:'Acme',referral_code:null,referral_credits_months:0}]);
+  if(target.endsWith('/rpc/get_team_entitlement'))return Response.json(null);
   if(target.includes('/rest/v1/profiles?id=eq.user1')&&options.method==='PATCH')return Response.json([{id:'user1',referral_code:'EQFABCDEF1234'}]);
   if(target.includes('/rest/v1/business_teams?owner_id=')&&!options.method)return Response.json([]);
-  if(target.includes('/rest/v1/business_teams')&&options.method==='POST')return Response.json([{id:'team1',owner_id:'user1',name:'Acme'}]);
-  if(target.includes('/rest/v1/business_team_members')&&options.method==='POST')return Response.json([{id:'member1',invited_email:'mate@example.com',role:'member',invitation_status:'pending'}]);
+
+  if(target.endsWith('/rpc/reserve_team_seat'))return Response.json({id:'member1',invited_email:'mate@example.com',role:'member',invitation_status:'pending'});
   if(target.includes('/rest/v1/business_team_members?'))return Response.json([]);
   assert.fail(`Unexpected ${target}`);
  },async()=>{
   const referral=await worker.fetch(new Request('https://app.example/api/referrals',{headers:{Authorization:`Bearer ${ownerToken}`}}),baseEnv);
   assert.equal(referral.status,200);assert.match((await referral.json()).referralCode,/^EQF/);
   const invite=await worker.fetch(jsonRequest('https://app.example/api/teams',{email:'mate@example.com',role:'member'},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);
-  assert.equal(invite.status,200);assert.equal((await invite.json()).invited,true);
+  assert.equal(invite.status,402);assert.match((await invite.json()).error,/active Crew & Team subscription/);
  });
 });
 
@@ -792,6 +796,8 @@ test('Crew & Team monthly checkout validates its base price and bills selected e
  });
  assert.equal(seen.length,1);assert.equal(seen[0].get('mode'),'subscription');assert.equal(seen[0].get('line_items[0][price]'),'price_team');
  assert.equal(seen[0].get('line_items[1][quantity]'),null);assert.equal(seen[0].get('metadata[total_seats]'),'3');
+ assert.equal(seen[0].get('subscription_data[metadata][billing_plan]'),'team_monthly');
+ assert.equal(seen[0].get('subscription_data[metadata][total_seats]'),'3');
  await withMockedFetch(async(url,options={})=>{
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
@@ -811,6 +817,7 @@ test('Crew & Team monthly checkout validates its base price and bills selected e
  assert.equal(seen[1].get('line_items[1][price_data][currency]'),'usd');
  assert.equal(seen[1].get('metadata[extra_seats]'),'2');
  assert.equal(seen[1].get('metadata[total_seats]'),'5');
+ assert.equal(seen[1].get('subscription_data[metadata][total_seats]'),'5');
  assert.equal(5900 + 2 * Number(seen[1].get('line_items[1][price_data][unit_amount]')),8900);
  await withMockedFetch(async(url,options={})=>{
   const target=String(url);
@@ -850,6 +857,50 @@ test('paid monthly Pro subscription activates renewable Pro access',async()=>{
  assert.equal(update.stripe_customer_id,'cus_monthly');
  assert.equal(update.stripe_subscription_id,'sub_monthly');
  assert.equal(update.stripe_subscription_status,'active');
+});
+
+test('paid Team checkout provisions subscription, seats, and Pro access from verified metadata',async()=>{
+ const timestamp=Math.floor(Date.now()/1000);let teamInsert;let profilePatch;let reconciled=false;
+ const object={id:'cs_team',mode:'subscription',payment_status:'paid',client_reference_id:'user1',subscription:'sub_team',customer:'cus_team',metadata:{billing_plan:'team_monthly',supabase_user_id:'user1',included_seats:'3',extra_seats:'2',total_seats:'5'}};
+ const body=JSON.stringify({id:'evt_team',type:'checkout.session.completed',livemode:true,data:{object}});
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(baseEnv.STRIPE_WEBHOOK_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const signatureBytes=await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${timestamp}.${body}`));
+ const signature=`t=${timestamp},v1=${[...new Uint8Array(signatureBytes)].map(byte=>byte.toString(16).padStart(2,'0')).join('')}`;
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.includes('/rest/v1/profiles?id=eq.user1&select=id'))return Response.json([{id:'user1'}]);
+  if(target.endsWith('/rest/v1/business_teams?owner_id=eq.user1&select=*&limit=1'))return Response.json([]);
+  if(target.endsWith('/rest/v1/business_teams')){teamInsert=JSON.parse(options.body);return Response.json([{id:'team1',...teamInsert}]);}
+  if(target.endsWith('/rpc/reconcile_team_seats')){reconciled=true;return Response.json(null);}
+  if(target.includes('/rest/v1/profiles?id=eq.user1')&&options.method==='PATCH'){profilePatch=JSON.parse(options.body);return new Response(null,{status:204});}
+  if(target.includes('/rest/v1/profiles?')&&!options.method)return Response.json([{id:'user1',referred_by_code:null,referral_reward_status:'none'}]);
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const response=await worker.fetch(new Request('https://app.example/api/stripe-webhook',{method:'POST',body,headers:{'Stripe-Signature':signature}}),baseEnv);
+  assert.equal(response.status,200);
+ });
+ assert.equal(teamInsert.owner_id,'user1');assert.equal(teamInsert.stripe_subscription_id,'sub_team');assert.equal(teamInsert.subscription_status,'active');assert.equal(teamInsert.seat_limit,5);
+ assert.equal(profilePatch.is_pro,true);assert.equal(profilePatch.stripe_subscription_status,'active');assert.equal(reconciled,true);
+});
+
+test('Team subscription cancellation disables access and reconciles reserved seats',async()=>{
+ const timestamp=Math.floor(Date.now()/1000);let teamPatch;let reconciliation=0;
+ const body=JSON.stringify({id:'evt_team_cancel',type:'customer.subscription.deleted',livemode:true,data:{object:{id:'sub_team',customer:'cus_team',status:'canceled',metadata:{billing_plan:'team_monthly',total_seats:'5'},items:{data:[{quantity:1},{quantity:2}]}}}});
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(baseEnv.STRIPE_WEBHOOK_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const signatureBytes=await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${timestamp}.${body}`));
+ const signature=`t=${timestamp},v1=${[...new Uint8Array(signatureBytes)].map(byte=>byte.toString(16).padStart(2,'0')).join('')}`;
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.includes('/rest/v1/profiles?stripe_subscription_id='))return Response.json([]);
+  if(target.includes('/rest/v1/business_teams?stripe_subscription_id='))return Response.json([{id:'team1'}]);
+  if(target.includes('/rest/v1/business_teams?id=eq.team1')&&options.method==='PATCH'){teamPatch=JSON.parse(options.body);return new Response(null,{status:204});}
+  if(target.endsWith('/rpc/reconcile_team_seats')){reconciliation++;return Response.json(null);}
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const response=await worker.fetch(new Request('https://app.example/api/stripe-webhook',{method:'POST',body,headers:{'Stripe-Signature':signature}}),baseEnv);
+  assert.equal(response.status,200);
+ });
+ assert.equal(teamPatch.subscription_status,'canceled');assert.equal(teamPatch.seat_limit,5);assert.equal(reconciliation,1);
 });
 
 test('adaptive pricing lifetime checkout still grants Pro from the US dollar amount',async()=>{
@@ -905,6 +956,14 @@ test('staging scheduled handler is disabled when configured for shared Supabase'
  worker.scheduled(event,{DISABLE_SCHEDULED_JOBS:'true'},{waitUntil(){scheduled=true;}});
  await new Promise(resolve=>setTimeout(resolve,0));
  assert.equal(scheduled,undefined);
+});
+
+test('team seat migration secures billing state and adds subscription-backed seat RPCs',async()=>{
+ const sql=await readFile(new URL('../supabase-team-seats.sql',import.meta.url),'utf8');
+ assert.match(sql,/stripe_subscription_id text/);assert.match(sql,/subscription_status in \('inactive','incomplete','incomplete_expired','trialing','active','past_due','unpaid','canceled','paused'\)/);
+ assert.match(sql,/check \(seat_limit between 3 and 50\)/);assert.match(sql,/create policy "Team owners read teams"/);assert.match(sql,/revoke insert, update, delete on public\.business_teams from authenticated/i);
+ assert.match(sql,/create or replace function public\.reserve_team_seat/);assert.match(sql,/active_count >= target\.seat_limit - 1/);assert.match(sql,/create or replace function public\.accept_team_invite/);
+ assert.match(sql,/create or replace function public\.get_team_entitlement/);assert.match(sql,/t\.subscription_status in \('active','trialing'\)/);assert.match(sql,/grant execute on function public\.get_team_entitlement\(uuid\) to service_role/i);
 });
 
 test('admin grants migration provides service-role CRUD on every admin dataset',async()=>{

@@ -123,6 +123,11 @@ export async function onRequestPost({ request, env }) {
     form.set('metadata[included_seats]', '3');
     form.set('metadata[extra_seats]', String(extraSeats));
     form.set('metadata[total_seats]', String(totalSeats));
+    form.set('subscription_data[metadata][billing_plan]', 'team_monthly');
+    form.set('subscription_data[metadata][supabase_user_id]', user.id);
+    form.set('subscription_data[metadata][included_seats]', '3');
+    form.set('subscription_data[metadata][extra_seats]', String(extraSeats));
+    form.set('subscription_data[metadata][total_seats]', String(totalSeats));
     const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY.trim()}`, 'Content-Type': 'application/x-www-form-urlencoded' },

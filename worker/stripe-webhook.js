@@ -198,7 +198,47 @@ export async function onRequestPost({ request, env }) {
     } else if (event.type === 'checkout.session.completed' && object.mode === 'subscription' && ['paid', 'no_payment_required'].includes(object.payment_status)) {
       const userId = await resolveCheckoutUserId(env, object);
       const subscriptionId = typeof object.subscription === 'string' ? object.subscription : object.subscription?.id;
-      await setProStatus(env, userId, true, object.customer, subscriptionId, 'active');
+      if (object.metadata?.billing_plan === 'team_monthly') {
+        if (object.subscription_data?.metadata?.billing_plan && object.subscription_data.metadata.billing_plan !== 'team_monthly') throw new Error('Team subscription metadata mismatch.');
+        const totalSeats = Number(object.metadata.total_seats);
+        const includedSeats = Number(object.metadata.included_seats);
+        const extraSeats = Number(object.metadata.extra_seats);
+        if (!subscriptionId || includedSeats !== 3 || !Number.isInteger(totalSeats) || totalSeats < 3 || totalSeats > 50 || extraSeats !== totalSeats - includedSeats) {
+          throw new Error('Team Checkout Session has invalid subscription or seat metadata.');
+        }
+        const base = supabaseBase(env);
+        const key = serviceRoleKey(env);
+        const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation' };
+        const teamResponse = await fetch(`${base}/rest/v1/business_teams?owner_id=eq.${encodeURIComponent(userId)}&select=*&limit=1`, { headers });
+        if (!teamResponse.ok) throw new Error('Team lookup failed while activating subscription. Apply supabase-growth-features.sql and supabase-team-seats.sql.');
+        let [team] = await teamResponse.json();
+        if (!team) {
+          const created = await fetch(`${base}/rest/v1/business_teams`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ owner_id: userId, name: 'My team', stripe_customer_id: object.customer || null,
+              stripe_subscription_id: subscriptionId, subscription_status: 'active', seat_limit: totalSeats })
+          });
+          if (!created.ok) throw new Error('Could not provision the Team subscription.');
+          [team] = await created.json();
+        } else {
+          const updated = await fetch(`${base}/rest/v1/business_teams?id=eq.${encodeURIComponent(team.id)}`, {
+            method: 'PATCH', headers,
+            body: JSON.stringify({ stripe_customer_id: object.customer || null, stripe_subscription_id: subscriptionId,
+              subscription_status: 'active', seat_limit: totalSeats, updated_at: new Date().toISOString() })
+          });
+          if (!updated.ok) throw new Error('Could not update Team subscription entitlements.');
+        }
+        if (!team?.id) throw new Error('Team subscription provisioning returned no team.');
+        if (object.metadata?.supabase_user_id !== userId) throw new Error('Team Checkout Session owner metadata mismatch.');
+        const reconcile = await fetch(`${base}/rest/v1/rpc/reconcile_team_seats`, {
+          method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_team_id: team.id })
+        });
+        if (!reconcile.ok) throw new Error('Could not reconcile Team seats during provisioning.');
+        await setProStatus(env, userId, true, object.customer, subscriptionId, 'active');
+      } else {
+        await setProStatus(env, userId, true, object.customer, subscriptionId, 'active');
+      }
     } else if (event.type === 'checkout.session.completed' && object.mode === 'payment' && object.payment_status === 'paid' && object.metadata?.quote_id && object.metadata?.payment_type === 'invoice_balance') {
       const quoteId = object.metadata.quote_id;
       const base = supabaseBase(env);
@@ -270,6 +310,12 @@ export async function onRequestPost({ request, env }) {
         if (!lookup.ok) throw new Error('Subscription lookup failed.');
         const profiles = await lookup.json();
         for (const profile of profiles) await setProStatus(env, profile.id, true, object.customer, subscriptionId, 'active');
+        const teamsResponse = await fetch(`${base}/rest/v1/business_teams?stripe_subscription_id=eq.${encodeURIComponent(subscriptionId)}&select=id`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+        if (!teamsResponse.ok) throw new Error('Team subscription lookup failed after successful invoice.');
+        for (const team of await teamsResponse.json()) {
+          const update = await fetch(`${base}/rest/v1/business_teams?id=eq.${encodeURIComponent(team.id)}`, { method: 'PATCH', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ subscription_status: 'active', updated_at: new Date().toISOString() }) });
+          if (!update.ok) throw new Error('Could not restore Team subscription after successful invoice.');
+        }
       }
     } else if (event.type === 'invoice.payment_failed') {
       const subscriptionId = typeof object.subscription === 'string' ? object.subscription : object.subscription?.id;
@@ -282,6 +328,17 @@ export async function onRequestPost({ request, env }) {
         if (!lookup.ok) throw new Error('Subscription lookup failed.');
         const profiles = await lookup.json();
         for (const profile of profiles) await setProStatus(env, profile.id, false, object.customer, subscriptionId, 'past_due');
+        const teamsResponse = await fetch(`${base}/rest/v1/business_teams?stripe_subscription_id=eq.${encodeURIComponent(subscriptionId)}&select=id`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+        if (!teamsResponse.ok) throw new Error('Team subscription lookup failed while handling failed invoice.');
+        for (const team of await teamsResponse.json()) {
+          const update = await fetch(`${base}/rest/v1/business_teams?id=eq.${encodeURIComponent(team.id)}`, {
+            method: 'PATCH', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({ subscription_status: 'past_due', updated_at: new Date().toISOString() })
+          });
+          if (!update.ok) throw new Error('Could not update Team subscription after failed invoice.');
+          const reconcile = await fetch(`${base}/rest/v1/rpc/reconcile_team_seats`, { method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_team_id: team.id }) });
+          if (!reconcile.ok) throw new Error('Could not revoke Team seats after failed invoice.');
+        }
       }
     } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted' || event.type === 'customer.subscription.paused') {
       const subscriptionId = object.id;
@@ -294,6 +351,25 @@ export async function onRequestPost({ request, env }) {
       const profiles = await lookup.json();
       const active = event.type === 'customer.subscription.updated' && ['active', 'trialing'].includes(object.status);
       for (const profile of profiles) await setProStatus(env, profile.id, active, object.customer, subscriptionId, object.status || 'inactive');
+      const teamLookup = await fetch(`${base}/rest/v1/business_teams?stripe_subscription_id=eq.${encodeURIComponent(subscriptionId)}&select=id,owner_id`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+      if (!teamLookup.ok) throw new Error('Team subscription lookup failed. Apply supabase-team-seats.sql.');
+      for (const team of await teamLookup.json()) {
+        const items = Array.isArray(object.items?.data) ? object.items.data : [];
+        const metadataTotal = Number(object.metadata?.total_seats);
+        const calculatedTotal = items.length > 1 ? 3 * (Number(items[0]?.quantity) || 1) + (Number(items[1]?.quantity) || 0) : 3;
+        const seatLimit = Number.isInteger(metadataTotal) && metadataTotal >= 3 && metadataTotal <= 50 ? metadataTotal : calculatedTotal;
+        const status = event.type === 'customer.subscription.deleted' ? 'canceled' : object.status || 'inactive';
+        const update = await fetch(`${base}/rest/v1/business_teams?id=eq.${encodeURIComponent(team.id)}`, {
+          method: 'PATCH', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ subscription_status: status, seat_limit: Math.max(3, Math.min(50, seatLimit)), updated_at: new Date().toISOString() })
+        });
+        if (!update.ok) throw new Error('Team subscription entitlement update failed.');
+        const reconcile = await fetch(`${base}/rest/v1/rpc/reconcile_team_seats`, {
+          method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_team_id: team.id })
+        });
+        if (!reconcile.ok) throw new Error('Could not reconcile member seats after subscription change.');
+      }
     }
   } catch (error) {
     console.error('Stripe webhook processing failed', error.message);

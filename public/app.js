@@ -491,6 +491,8 @@
         const access = await accessResponse.json();
         profile.isStaff = Boolean(access.staff) && !access.pro;
         profile.isPro = Boolean(access.pro) || Boolean(access.staff);
+        profile.teamRole = access.team?.role || (access.teamOwner ? 'owner' : '');
+        profile.teamSeatLimit = Number(access.team?.seatLimit || access.teamOwner?.seatLimit || 0);
       }
     } catch (error) {
       console.warn('Could not check staff access', error);
@@ -592,15 +594,20 @@
     const list = $('#team-members-list');
     const invites = $('#team-pending-invites');
     if (!list) return;
-    if (!isPro()) {
-      list.innerHTML = '<p>Upgrade to Pro to invite teammates and share your quote desk.</p>';
+    if (!isPro() || (profile.teamRole && profile.teamRole !== 'owner')) {
+      list.innerHTML = profile.teamRole && profile.teamRole !== 'owner'
+        ? `<p>Team role: ${escapeHTML(profile.teamRole)}. Your access follows the active team subscription.</p>`
+        : '<p>Upgrade to Pro to invite teammates and share your quote desk.</p>';
       if (invites) invites.innerHTML = '';
       return;
     }
     const members = teamState.members || [];
-    list.innerHTML = members.length
+    const activeSeats = members.filter(member => ['pending', 'accepted'].includes(member.invitation_status)).length + 1;
+    const seatLimit = Number(teamState.team?.seat_limit || profile.teamSeatLimit || 0);
+    const seatSummary = seatLimit ? `<p>${activeSeats} of ${seatLimit} seats in use, including the owner.</p>` : '';
+    list.innerHTML = seatSummary + (members.length
       ? members.map(member => `<div class="growth-list-item"><span>${escapeHTML(member.invited_email)} · ${escapeHTML(member.role)} · ${escapeHTML(member.invitation_status)}</span>${member.invitation_status === 'pending' || member.invitation_status === 'accepted' ? `<button type="button" class="button button-secondary button-small team-revoke" data-member-id="${escapeHTML(member.id)}">Revoke</button>` : ''}</div>`).join('')
-      : '<p>No teammates yet. Invite someone by email.</p>';
+      : '<p>No teammates yet. Invite someone by email.</p>');
     if (invites) {
       const pending = teamState.pendingInvites || [];
       invites.innerHTML = pending.length
