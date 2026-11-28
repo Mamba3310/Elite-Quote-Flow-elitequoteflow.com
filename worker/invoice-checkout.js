@@ -1,4 +1,5 @@
 import { json, requireProUser, readJson } from './pro-access.js';
+import { payoutDestinationFields, requirePayoutAccount } from './payout-account.js';
 
 export async function onInvoiceCheckout(request, env) {
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -45,6 +46,8 @@ async function createInvoiceSession(request, env, access, quote) {
   const depositPaid = quote.deposit_paid_at ? total * depositFraction : 0;
   const balance = Math.max(0, Math.round((total - depositPaid) * (10 ** fractionDigits)));
   if (!Number.isSafeInteger(balance) || balance <= 0) return json({ error: 'There is no remaining balance to collect.' }, 400);
+  const payout = await requirePayoutAccount(access, env);
+  if (payout.error) return payout.error;
 
   const origin = new URL(request.url).origin;
   const form = new URLSearchParams({
@@ -57,7 +60,8 @@ async function createInvoiceSession(request, env, access, quote) {
     'line_items[0][price_data][product_data][name]': `Invoice balance: ${quote.service}`,
     'metadata[quote_id]': quote.id,
     'metadata[supabase_user_id]': access.user.id,
-    'metadata[payment_type]': 'invoice_balance'
+    'metadata[payment_type]': 'invoice_balance',
+    ...payoutDestinationFields(payout.id)
   });
   if (quote.email) form.set('customer_email', quote.email);
   const idempotencyKey = `eqf-invoice-${quote.id}-${balance}`;
