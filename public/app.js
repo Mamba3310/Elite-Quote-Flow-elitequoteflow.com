@@ -2779,9 +2779,12 @@
     const lift = Math.max(0, Math.min(50, Number($('#lead-calc-lift').value) || 0));
     const extraWon = quotes * lift / 100;
     const opportunity = Math.round(extraWon * amount * 100) / 100;
-    const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: isCurrencyCode(profile.defaultCurrency) ? profile.defaultCurrency : 'USD', maximumFractionDigits: 0 }).format(opportunity);
+    const currency = isCurrencyCode(profile.defaultCurrency) ? profile.defaultCurrency : 'USD';
+    const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 });
+    const money = formatter.format(opportunity);
+    const annual = formatter.format(opportunity * 12);
     $('#lead-calc-result').textContent = money;
-    $('#lead-calc-copy').textContent = `${extraWon.toFixed(1)} additional accepted quotes per month in this scenario (${rate}% current acceptance + ${lift} percentage points).`;
+    $('#lead-calc-copy').textContent = `${annual} / year in extra won work · ${extraWon.toFixed(1)} additional accepted quotes per month in this scenario (${rate}% current acceptance + ${lift} percentage points).`;
   };
   ['lead-calc-quotes','lead-calc-amount','lead-calc-rate','lead-calc-lift'].forEach(id => document.getElementById(id)?.addEventListener('input', updateLeadEstimate));
   updateLeadEstimate();
