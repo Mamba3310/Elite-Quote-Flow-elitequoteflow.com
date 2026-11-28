@@ -556,11 +556,12 @@ test('deposit checkout refuses to charge the platform when payouts are not conne
 
 test('connect onboarding creates an Express account and returns the Stripe link',async()=>{
  const saved=[];
+ let accountForm;
  await withMockedFetch(async(url,options={})=>{
   const target=String(url);
   if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
   if(target.includes('/rest/v1/profiles?')&&!options.method)return Response.json([{id:'user1',is_pro:true,stripe_connect_account_id:''}]);
-  if(target==='https://api.stripe.com/v1/accounts')return Response.json({id:'acct_new123'});
+  if(target==='https://api.stripe.com/v1/accounts'){accountForm=new URLSearchParams(options.body);return Response.json({id:'acct_new123'});}
   if(target.includes('/rest/v1/profiles?')&&options.method==='PATCH'){saved.push(JSON.parse(options.body));return new Response(null,{status:204});}
   if(target==='https://api.stripe.com/v1/account_links')return Response.json({url:'https://connect.stripe.com/setup/s'});
   assert.fail(`Unexpected ${target}`);
@@ -570,6 +571,24 @@ test('connect onboarding creates an Express account and returns the Stripe link'
   assert.equal((await response.json()).url,'https://connect.stripe.com/setup/s');
  });
  assert.equal(saved[0].stripe_connect_account_id,'acct_new123');
+ assert.equal(accountForm.get('type'),null);
+ assert.equal(accountForm.get('controller[fees][payer]'),'application');
+ assert.equal(accountForm.get('controller[losses][payments]'),'application');
+ assert.equal(accountForm.get('controller[stripe_dashboard][type]'),'express');
+});
+
+test('connect onboarding shows Stripe’s reason when account creation is rejected',async()=>{
+ await withMockedFetch(async url=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{id:'user1',is_pro:true,stripe_connect_account_id:''}]);
+  if(target==='https://api.stripe.com/v1/accounts')return Response.json({error:{message:'Please review the responsibilities of managing losses for connected accounts.'}},{status:400});
+  assert.fail(`Unexpected ${target}`);
+ },async()=>{
+  const response=await worker.fetch(jsonRequest('https://app.example/api/connect-onboarding',{country:'US'},'POST',{Authorization:`Bearer ${ownerToken}`}),baseEnv);
+  assert.equal(response.status,502);
+  assert.match((await response.json()).error,/managing losses/);
+ });
 });
 
 test('follow-ups send in-app and unused AI drafts stay out of the quote',async()=>{

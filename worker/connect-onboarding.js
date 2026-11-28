@@ -2,6 +2,12 @@ import { json, requireProUser, readJson } from './pro-access.js';
 
 const COUNTRIES = new Set(['US', 'CA', 'GB', 'AU', 'NZ', 'IE', 'FR', 'ES', 'PT', 'BR', 'MX', 'NG', 'ZA', 'DE', 'NL']);
 
+function stripeFailure(body, fallback) {
+  const message = String(body?.error?.message || '').replace(/\s+/g, ' ').trim();
+  if (!message || /sk_(live|test)|rk_/i.test(message)) return fallback;
+  return message.slice(0, 240);
+}
+
 export async function onConnectOnboarding(request, env) {
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (!env.STRIPE_SECRET_KEY?.trim() || !env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
@@ -23,8 +29,10 @@ export async function onConnectOnboarding(request, env) {
 
   if (!accountId) {
     const form = new URLSearchParams({
-      type: 'express',
       country,
+      'controller[fees][payer]': 'application',
+      'controller[losses][payments]': 'application',
+      'controller[stripe_dashboard][type]': 'express',
       'capabilities[card_payments][requested]': 'true',
       'capabilities[transfers][requested]': 'true'
     });
@@ -37,7 +45,7 @@ export async function onConnectOnboarding(request, env) {
     const account = await readJson(created);
     if (!created.ok || !/^acct_[A-Za-z0-9]+$/.test(account?.id || '')) {
       console.error('Stripe Connect account creation failed', created.status, account?.error?.code || 'unknown');
-      return json({ error: 'Stripe could not start the payout account.' }, 502);
+      return json({ error: stripeFailure(account, 'Stripe could not start the payout account.') }, 502);
     }
     accountId = account.id;
     const save = await fetch(`${access.base}/rest/v1/profiles?id=eq.${encodeURIComponent(access.user.id)}`, {
@@ -61,6 +69,6 @@ export async function onConnectOnboarding(request, env) {
     body: linkForm
   });
   const link = await readJson(linkResponse);
-  if (!linkResponse.ok || !link?.url) return json({ error: 'Stripe could not open payout setup.' }, 502);
+  if (!linkResponse.ok || !link?.url) return json({ error: stripeFailure(link, 'Stripe could not open payout setup.') }, 502);
   return json({ url: link.url });
 }
