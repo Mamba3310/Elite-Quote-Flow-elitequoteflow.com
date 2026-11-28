@@ -191,13 +191,19 @@ test('public quote views and successful decisions write anonymized analytics eve
  });assert.equal(events.length,2);assert.deepEqual(events[0].blobs.slice(0,1),['/q/:quote']);assert.equal(events[0].blobs[3],'quote_view');assert.equal(events[1].blobs[3],'quote_decision');assert.equal(events[1].blobs[4],'accepted');
 });
 
+test('trade page generator uses compact navigation and searchable linked directory output',async()=>{
+ const generator=await readFile(new URL('../scripts/generate-trade-pages.js',import.meta.url),'utf8');
+ assert.doesNotMatch(generator,/landing-trade-nav-select|trade-switch|const options = allTrades/);
+ assert.match(generator,/65 Service Trades/);assert.match(generator,/id="trades-directory" class="trade-grid"/);assert.match(generator,/id="trade-directory-search"/);assert.match(generator,/class="trade-directory-link" href=/);assert.match(generator,/document\.querySelectorAll\('#trades-directory \.trade-grid article'\)/);
+});
+
 test('marketing routes serve all generated trade pages and crawl files',async()=>{
  const responseFor=(pathname)=>worker.fetch(new Request(`https://elitequoteflow.com${pathname}`),{ASSETS:{fetch:async request=>{const pathname=new URL(request.url).pathname;try{return new Response(await readFile(new URL(`../public${pathname}`,import.meta.url),'utf8'),{headers:{'Content-Type':pathname.endsWith('.xml')?'application/xml':'text/html; charset=utf-8'}})}catch{return new Response('Not found',{status:404})}}}});
  const extraTrades=await import('../scripts/additional-trades.js');
  const baseTrades=['landscaping','plumbing','electrical','hvac','painting','house-cleaning','roofing','handyman','pest-control','flooring','remodeling','pressure-washing','pool-service','moving','auto-detailing'];
  const trades=[...baseTrades,...extraTrades.default.map(trade=>trade.slug)];
- for(const slug of trades){const response=await responseFor(`/${slug}`);const body=await response.text();assert.equal(response.status,200,slug);assert.match(body,/QUOTE EXAMPLE/i,slug);assert.match(body,new RegExp(`canonical.*${slug}`),slug)}
- const directory=await responseFor('/trades');const directoryHtml=await directory.text();assert.match(directoryHtml,/Explore quote examples for 65 service trades/i);assert.match(directoryHtml,/trade-directory-select/);assert.equal((directoryHtml.match(/<option value="\//g)||[]).length,130);assert.equal((directoryHtml.match(/<article><a href="\//g)||[]).length,65);
+ for(const slug of trades){const response=await responseFor(`/${slug}`);const body=await response.text();assert.equal(response.status,200,slug);assert.match(body,/QUOTE EXAMPLE/i,slug);assert.match(body,new RegExp(`canonical.*${slug}`),slug);assert.doesNotMatch(body,/landing-trade-nav-select/);assert.match(body,/65 Service Trades/)}
+ const directory=await responseFor('/trades');const directoryHtml=await directory.text();assert.match(directoryHtml,/Browse all 65 service trades/i);assert.match(directoryHtml,/id="trade-directory-search"/);assert.equal((directoryHtml.match(/class="trade-directory-link" href="\//g)||[]).length,65);assert.doesNotMatch(directoryHtml,/landing-trade-nav-select|<select class="niche-select"/);
  const sitemap=await responseFor('/sitemap.xml');const xml=await sitemap.text();for(const slug of trades)assert.match(xml,new RegExp(`https://elitequoteflow\\.com/${slug}`));
  const robots=await responseFor('/robots.txt');assert.match(await robots.text(),/Sitemap: https:\/\/elitequoteflow.com\/sitemap.xml/);
 });
@@ -211,7 +217,8 @@ test('marketing funnel events are restricted to aggregate owner analytics',async
  const events=[];const env={SITE_ANALYTICS:{writeDataPoint:event=>events.push(event)}};
  for(const event of ['pageview','engaged_20s','signup_click','signup_submit','signin_submit','trade_directory_click']){const response=await worker.fetch(jsonRequest('https://elitequoteflow.com/api/analytics',{event,path:'/plumbing',referrer:'https://search.example/'},'POST'),env);assert.equal(response.status,202);}
  const bad=await worker.fetch(jsonRequest('https://elitequoteflow.com/api/analytics',{event:'unknown',path:'/'}),env);assert.equal(bad.status,400);assert.equal(events.length,6);assert.equal(events[1].blobs[3],'engaged_20s');assert.equal(events[2].blobs[0],'/plumbing');
- const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const marketing=await readFile(new URL('../public/marketing.js',import.meta.url),'utf8');assert.match(html,/id="analytics-funnel"/);assert.match(html,/landing-trade-nav-select/);assert.match(html,/href="\/trades"/);assert.doesNotMatch(html,/trade-directory-grid/);assert.match(marketing,/landing-trade-nav-select/);
+ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const marketing=await readFile(new URL('../public/marketing.js',import.meta.url),'utf8');assert.match(html,/id="analytics-funnel"/);assert.doesNotMatch(html,/landing-trade-nav-select/);assert.match(html,/65 Service Trades/);assert.match(html,/id="trades-directory"/);assert.match(html,/trade-directory-group/);assert.equal((html.match(/class="trade-directory-link"/g)||[]).length,65);assert.match(marketing,/trade-directory-link/);
+ const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');assert.match(app,/tradeSearch\?\.addEventListener\('input'/);
 });
 
 test('booking page submits customer requests internally rather than redirecting to a third party',async()=>{
@@ -264,7 +271,7 @@ test('review honeypot silently accepts bots without database writes',async()=>{
 
 test('landing page shows an honest sample preview, signup CTAs, interactive value estimator, steps, and current plan path',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const css=await readFile(new URL('../public/landing-refresh.css',import.meta.url),'utf8');const responsiveCss=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');const desktopCss=await readFile(new URL('../public/desktop-showcase.css',import.meta.url),'utf8');const upgradeCss=await readFile(new URL('../public/upgrade-notice.css',import.meta.url),'utf8');
- assert.match(responsiveCss,/\.landing-preview\{max-width:640px/);assert.match(responsiveCss,/\.landing-preview\{max-width:640px;padding:20px\}/);assert.match(html,/id="landing-signin"/);assert.doesNotMatch(html,/landing-assistant-button/);assert.match(css,/\.lead-calculator/);assert.match(html,/Send the quote/);assert.match(html,/PRODUCT PREVIEW/);assert.match(html,/id="lead-calc-quotes"/);assert.match(html,/id="lead-calc-amount"/);assert.match(html,/id="lead-calc-result"/);assert.match(html,/id="landing-steps-cta"/);assert.match(html,/id="landing-pricing-cta"/);assert.match(html,/FREE TO START/);assert.match(html,/landing-pricing-grid/);assert.match(html,/Start free\. Upgrade when you need to get paid faster\./);assert.match(html,/Start with 14 days of Pro for \$4\.99/);assert.match(html,/card is required/);assert.equal((html.match(/class="landing-plan-card/g)||[]).length,3);assert.match(html,/Stripe deposits and invoice balance collection/);assert.match(html,/Crew &amp; Team/);assert.match(html,/Includes 3 seats/);assert.match(html,/Crew &amp; Team is \$59\/month and includes 3 seats/);assert.doesNotMatch(html,/\+\$15 per extra seat/);assert.match(html,/No invented testimonials/);assert.match(html,/Watch the 60-second walkthrough/);assert.match(html,/id="landing-trades-title"/);assert.equal((html.match(/class="landing-plan-card/g)||[]).length,3);assert.match(html,/landing-trade-nav-label/);assert.match(html,/landing-trade-nav-select/);assert.doesNotMatch(html,/Choose your trade <span/);assert.match(await readFile(new URL('../public/marketing.js',import.meta.url),'utf8'),/landing-trade-nav-select/);assert.doesNotMatch(html,/Prototype preview/);assert.match(app,/updateLeadEstimate/);assert.match(app,/landing-calc-cta/);assert.match(app,/landing-pricing-cta/);assert.match(app,/Create an account/);
+ assert.match(responsiveCss,/\.landing-preview\{max-width:640px/);assert.match(responsiveCss,/\.landing-preview\{max-width:640px;padding:20px\}/);assert.match(html,/id="landing-signin"/);assert.doesNotMatch(html,/landing-assistant-button/);assert.match(css,/\.lead-calculator/);assert.match(html,/Send the quote/);assert.match(html,/PRODUCT PREVIEW/);assert.match(html,/id="lead-calc-quotes"/);assert.match(html,/id="lead-calc-amount"/);assert.match(html,/id="lead-calc-result"/);assert.match(html,/id="landing-steps-cta"/);assert.match(html,/id="landing-pricing-cta"/);assert.match(html,/FREE TO START/);assert.match(html,/landing-pricing-grid/);assert.match(html,/Start free\. Upgrade when you need to get paid faster\./);assert.match(html,/Start with 14 days of Pro for \$4\.99/);assert.match(html,/card is required/);assert.equal((html.match(/class="landing-plan-card/g)||[]).length,3);assert.match(html,/Stripe deposits and invoice balance collection/);assert.match(html,/Crew &amp; Team/);assert.match(html,/\$59\/month includes 3 seats\./);assert.match(html,/id="landing-team-seats"/);assert.match(html,/id="landing-team-seat-price"/);assert.match(html,/Crew &amp; Team is \$59\/month and includes 3 seats/);assert.doesNotMatch(html,/\$15 per extra seat/);assert.match(html,/No invented testimonials/);assert.match(html,/Watch the 60-second walkthrough/);assert.match(html,/id="trades-directory-title"/);assert.equal((html.match(/class="landing-plan-card/g)||[]).length,3);assert.equal((html.match(/class="trade-directory-footer"/g)||[]).length,1);assert.doesNotMatch(html,/landing-trade-nav-label/);assert.doesNotMatch(html,/landing-trade-nav-select/);assert.match(html,/href="#trades-directory" aria-label="65 Service Trades">65 Service Trades/);assert.match(html,/id="trades-directory"/);assert.equal((html.match(/<section class="trade-directory-footer"/g)||[]).length,1);assert.equal((html.match(/class="trade-directory-link"/g)||[]).length,65);assert.match(app,/trade-directory-search/);assert.match(await readFile(new URL('../public/marketing.js',import.meta.url),'utf8'),/trade-directory-link/);assert.doesNotMatch(html,/Prototype preview/);assert.match(app,/updateLeadEstimate/);assert.match(app,/landing-calc-cta/);assert.match(app,/landing-pricing-cta/);assert.match(app,/Create an account/);
  assert.match(html,/id="metric-sent"/);assert.match(html,/SENT THIS MONTH/);assert.match(app,/const sentThisMonth = openQuotes\.filter/);assert.match(app,/created\.getFullYear\(\) === today\.getFullYear\(\) && created\.getMonth\(\) === today\.getMonth\(\)/);assert.match(app,/metric-sent.*sentThisMonth\.length/);assert.match(html,/id="customer-review-form"/);assert.match(html,/id="published-customer-reviews"/);assert.match(html,/id="team-panel"/);assert.match(html,/id="referral-panel"/);assert.match(await readFile(new URL('../public/reviews.js',import.meta.url),'utf8'),/api\/customer-reviews/);assert.match(app,/api\/send-quote-email/);assert.match(app,/api\/invoice-checkout/);assert.match(app,/FREE_MONTHLY_QUOTE_LIMIT/);assert.match(await readFile(new URL('../public/reviews.js',import.meta.url),'utf8'),/review\.review_text/);assert.doesNotMatch(app,/review\.customer_email/);
  assert.match(html,/From the first quote to the customer/);assert.match(html,/Follow up before the quote goes quiet/);assert.match(html,/desktop-showcase\.css/);assert.match(desktopCss,/@media \(min-width: 900px\)/);assert.match(desktopCss,/font-size: clamp\(66px, 6\.2vw, 94px\)/);assert.match(desktopCss,/radial-gradient/);assert.match(desktopCss,/landing-pricing-note[\s\S]*margin: 24px auto 54px/);assert.match(upgradeCss,/\.toast\.is-upgrade/);assert.match(upgradeCss,/\.toast\.is-upgrade/);assert.match(upgradeCss,/max-width:720px/);assert.match(app,/upgrade: true/);assert.match(app,/label: 'View Pro plans'/);assert.match(app,/14000/);assert.match(app,/setTimeout\(hideToast, error \? Math\.max\(duration, 8000\) : duration\)/);assert.doesNotMatch(desktopCss,/@media\s*\(max-width:/);assert.match(html,/id="welcome-subtitle"/);assert.match(app,/function updateDeskIntro/);assert.match(app,/check in before a job goes quiet/);
 });
@@ -277,14 +284,21 @@ test('dashboard advertises Solo plan options and the paid $4.99 trial',async()=>
  assert.match(html,/class="landing-plan-card landing-plan-team"/);
  assert.match(html,/Crew &amp; Team/);
  assert.match(html,/\$59 \/ mo/);
- assert.match(html,/Includes 3 seats/);
+ assert.match(html,/\$59\/month includes 3 seats\./);
 
  assert.match(html,/id="landing-team-cta"/);
+ assert.match(html,/id="landing-team-seats"/);
+ assert.match(html,/id="landing-team-seat-price"/);
  assert.match(html,/renews at \$29\/month/);
+ assert.match(html,/type="number" min="3" max="50" step="1" value="3"/);
  const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
  assert.match(app,/sessionStorage\.setItem\('eqf-checkout-plan', 'solo_trial'\)/);
  assert.match(app,/sessionStorage\.setItem\('eqf-checkout-plan', 'solo_monthly'\)/);
- assert.match(app,/eqf-checkout-plan', 'team_monthly'/);
+ assert.match(app,/sessionStorage\.setItem\('eqf-checkout-plan', 'team_monthly'\)/);
+ assert.match(app,/eqf-team-total-seats/);
+ assert.match(app,/59 \+ \(seats - 3\) \* 15/);
+ assert.match(app,/teamSeatInput\?\.addEventListener\('input'/);
+ assert.match(app,/totalSeats: Number\(sessionStorage\.getItem\('eqf-team-total-seats'/);
  assert.match(app,/beginPlanCheckout/);
  assert.match(app,/requestedPlan/);
  assert.match(app,/\/api\/create-checkout-session/);
@@ -762,7 +776,7 @@ test('direct Solo Pro monthly plan creates its own recurring Stripe checkout',as
  assert.equal(seen[0].get('metadata[billing_plan]'),'solo_monthly');assert.equal(seen[0].get('subscription_data[trial_period_days]'),null);
 });
 
-test('Crew & Team monthly checkout validates its own $59 price and creates separate subscription session',async()=>{
+test('Crew & Team monthly checkout validates its base price and bills selected extra seats',async()=>{
  const seen=[];
  await withMockedFetch(async(url,options={})=>{
   const target=String(url);
@@ -773,11 +787,39 @@ test('Crew & Team monthly checkout validates its own $59 price and creates separ
   assert.fail('Unexpected '+target);
  },async()=>{
   const env={...baseEnv,STRIPE_SECRET_KEY:'sk_test_only',STRIPE_TEAM_MONTHLY_PRICE_ID:'price_team'};
-  const response=await worker.fetch(jsonRequest('https://app.example/api/create-checkout-session',{plan:'team_monthly'},'POST',{Authorization:'Bearer test-token'}),env);
+  const response=await worker.fetch(jsonRequest('https://app.example/api/create-checkout-session',{plan:'team_monthly',totalSeats:3},'POST',{Authorization:'Bearer test-token'}),env);
   assert.equal(response.status,200);assert.equal((await response.json()).url,'https://checkout.stripe.com/c/team');
  });
  assert.equal(seen.length,1);assert.equal(seen[0].get('mode'),'subscription');assert.equal(seen[0].get('line_items[0][price]'),'price_team');
- assert.equal(seen[0].get('metadata[billing_plan]'),'team_monthly');
+ assert.equal(seen[0].get('line_items[1][quantity]'),null);assert.equal(seen[0].get('metadata[total_seats]'),'3');
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  if(target.includes('/rest/v1/profiles?'))return Response.json([{is_pro:false}]);
+  if(target==='https://api.stripe.com/v1/prices/price_team')return Response.json({id:'price_team',currency:'usd',unit_amount:5900,recurring:{interval:'month',interval_count:1}});
+  if(target==='https://api.stripe.com/v1/checkout/sessions'){seen.push(new URLSearchParams(options.body));return Response.json({url:'https://checkout.stripe.com/c/team-five'});}
+  assert.fail('Unexpected '+target);
+ },async()=>{
+  const env={...baseEnv,STRIPE_SECRET_KEY:'sk_test_only',STRIPE_TEAM_MONTHLY_PRICE_ID:'price_team'};
+  const response=await worker.fetch(jsonRequest('https://app.example/api/create-checkout-session',{plan:'team_monthly',totalSeats:5},'POST',{Authorization:'Bearer test-token'}),env);
+  assert.equal(response.status,200);
+ });
+ assert.equal(seen.length,2);assert.equal(seen[1].get('line_items[0][price]'),'price_team');
+ assert.equal(seen[1].get('line_items[1][price_data][unit_amount]'),'1500');
+ assert.equal(seen[1].get('line_items[1][price_data][recurring][interval]'),'month');
+ assert.equal(seen[1].get('line_items[1][quantity]'),'2');
+ assert.equal(seen[1].get('line_items[1][price_data][currency]'),'usd');
+ assert.equal(seen[1].get('metadata[extra_seats]'),'2');
+ assert.equal(seen[1].get('metadata[total_seats]'),'5');
+ assert.equal(5900 + 2 * Number(seen[1].get('line_items[1][price_data][unit_amount]')),8900);
+ await withMockedFetch(async(url,options={})=>{
+  const target=String(url);
+  if(target.endsWith('/auth/v1/user'))return Response.json({id:'user1',email:'owner@example.com'});
+  assert.fail('Seat validation should reject before profile lookup: '+target);
+ },async()=>{
+  const belowMinimum=await worker.fetch(jsonRequest('https://app.example/api/create-checkout-session',{plan:'team_monthly',totalSeats:2},'POST',{Authorization:'Bearer test-token'}),{...baseEnv,STRIPE_SECRET_KEY:'sk_test_only',STRIPE_TEAM_MONTHLY_PRICE_ID:'price_team'});
+  assert.equal(belowMinimum.status,400);
+ });
 });
 
 test('monthly checkout rejects accounts already on Pro',async()=>{

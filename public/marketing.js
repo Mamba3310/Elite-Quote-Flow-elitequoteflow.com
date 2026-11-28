@@ -30,6 +30,7 @@
     }, 20500);
   };
   stageStart();
+  document.querySelectorAll('.trade-directory-link')?.forEach(link => link.addEventListener('click', () => funnelEvent('trade_directory_click', { action: link.getAttribute('href') })));
   document.querySelectorAll('.landing-trade-nav-select')?.forEach(select => select.addEventListener('change', event => {
     const destination = event.currentTarget.value;
     if (destination) {

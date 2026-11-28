@@ -69,6 +69,9 @@ export async function onRequestPost({ request, env }) {
   }
   if (plan === 'team_monthly') {
     if (!env.STRIPE_SECRET_KEY?.trim() || !env.STRIPE_TEAM_MONTHLY_PRICE_ID?.trim()) return json({ error: 'Crew & Team monthly checkout is not configured.' }, 503);
+    const totalSeats = Number(payload?.totalSeats ?? 3);
+    if (!Number.isInteger(totalSeats) || totalSeats < 3 || totalSeats > 50) return json({ error: 'Choose between 3 and 50 total seats.' }, 400);
+    const extraSeats = totalSeats - 3;
     const base = env.SUPABASE_URL.replace(/\/$/, '');
     const profileResponse = await fetch(`${base}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=is_pro`, {
       headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: authorization }
@@ -84,6 +87,15 @@ export async function onRequestPost({ request, env }) {
     if (!priceResponse.ok || price?.currency !== 'usd' || price?.unit_amount !== 5900 || price?.recurring?.interval !== 'month' || price?.recurring?.interval_count !== 1) {
       return json({ error: 'Configured Crew & Team price must be USD $59/month.' }, 503);
     }
+    if (extraSeats > 0 && env.STRIPE_TEAM_EXTRA_SEAT_PRICE_ID?.trim()) {
+      const extraPriceResponse = await fetch(`https://api.stripe.com/v1/prices/${encodeURIComponent(env.STRIPE_TEAM_EXTRA_SEAT_PRICE_ID.trim())}`, {
+        headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY.trim()}` }
+      });
+      const extraPrice = await readJsonSafely(extraPriceResponse);
+      if (!extraPriceResponse.ok || extraPrice?.currency !== 'usd' || extraPrice?.unit_amount !== 1500 || extraPrice?.recurring?.interval !== 'month' || extraPrice?.recurring?.interval_count !== 1) {
+        return json({ error: 'Configured extra-seat price must be USD $15/month.' }, 503);
+      }
+    }
     const appUrl = env.PUBLIC_APP_URL || new URL(request.url).origin;
     const form = new URLSearchParams({
       mode: 'subscription',
@@ -94,8 +106,23 @@ export async function onRequestPost({ request, env }) {
     });
     form.set('line_items[0][price]', priceId);
     form.set('line_items[0][quantity]', '1');
+    if (extraSeats > 0) {
+      if (env.STRIPE_TEAM_EXTRA_SEAT_PRICE_ID?.trim()) {
+        form.set('line_items[1][price]', env.STRIPE_TEAM_EXTRA_SEAT_PRICE_ID.trim());
+      } else {
+        form.set('line_items[1][price_data][currency]', 'usd');
+        form.set('line_items[1][price_data][unit_amount]', '1500');
+        form.set('line_items[1][price_data][recurring][interval]', 'month');
+        form.set('line_items[1][price_data][product_data][name]', 'Crew & Team additional seat');
+
+      }
+      form.set('line_items[1][quantity]', String(extraSeats));
+    }
     form.set('metadata[billing_plan]', 'team_monthly');
     form.set('metadata[supabase_user_id]', user.id);
+    form.set('metadata[included_seats]', '3');
+    form.set('metadata[extra_seats]', String(extraSeats));
+    form.set('metadata[total_seats]', String(totalSeats));
     const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY.trim()}`, 'Content-Type': 'application/x-www-form-urlencoded' },

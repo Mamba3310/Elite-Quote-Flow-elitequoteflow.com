@@ -2575,7 +2575,7 @@
       const checkout = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ plan })
+        body: JSON.stringify({ plan, ...(plan === 'team_monthly' ? { totalSeats: Number(sessionStorage.getItem('eqf-team-total-seats') || 3) } : {}) })
       });
       const result = await checkout.json();
       if (!checkout.ok || !result.url) throw new Error(result.error || 'Paid trial checkout is not configured yet.');
@@ -2708,12 +2708,18 @@
   });
 
   $('#landing-signin').addEventListener('click', () => showSignedOut('signin'));
-  document.querySelectorAll('.landing-trade-nav-select').forEach(select => select.addEventListener('change', event => {
-    const destination = event.currentTarget.value;
-    if (destination) {
-      window.EliteQuoteFlowMarketing?.funnelEvent('trade_directory_click', { action: destination });
-      window.location.assign(destination);
-    }
+  const tradeSearch = $('#trade-directory-search');
+  tradeSearch?.addEventListener('input', () => {
+    const term = tradeSearch.value.trim().toLocaleLowerCase();
+    document.querySelectorAll('.trade-directory-group').forEach(group => {
+      group.querySelectorAll('li').forEach(item => {
+        item.hidden = !item.textContent.toLocaleLowerCase().includes(term);
+      });
+      group.hidden = !group.querySelector('li:not([hidden])');
+    });
+  });
+  document.querySelectorAll('.trade-directory-group a').forEach(link => link.addEventListener('click', () => {
+    window.EliteQuoteFlowMarketing?.funnelEvent('trade_directory_click', { action: link.getAttribute('href') });
   }));
   const walkthrough = $('#product-walkthrough');
   $('#landing-demo-video').addEventListener('click', () => walkthrough.showModal());
@@ -2732,8 +2738,21 @@
     sessionStorage.setItem('eqf-checkout-plan', 'solo_monthly');
     showRegistration();
   });
+  const teamSeatInput = $('#landing-team-seats');
+  const teamSeatPrice = $('#landing-team-seat-price');
+  const updateTeamSeatDisplay = () => {
+    if (!teamSeatInput || !teamSeatPrice) return;
+    const seats = Math.max(3, Math.min(50, Math.trunc(Number(teamSeatInput.value) || 3)));
+    teamSeatInput.value = String(seats);
+    teamSeatPrice.textContent = `${seats} seats · $${59 + (seats - 3) * 15}/month`;
+  };
+  teamSeatInput?.addEventListener('input', updateTeamSeatDisplay);
+  teamSeatInput?.addEventListener('input', updateTeamSeatDisplay);
+  teamSeatInput?.addEventListener('change', updateTeamSeatDisplay);
+  updateTeamSeatDisplay();
   $('#landing-team-cta').addEventListener('click', () => {
     sessionStorage.setItem('eqf-checkout-plan', 'team_monthly');
+    sessionStorage.setItem('eqf-team-total-seats', String(Math.max(3, Math.min(50, Number($('#landing-team-seats')?.value) || 3))));
     showRegistration();
   });
   const updateLeadEstimate = () => {
