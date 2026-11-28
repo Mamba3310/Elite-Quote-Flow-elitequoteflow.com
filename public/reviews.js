@@ -29,8 +29,6 @@
       if (!response.ok) throw new Error(payload.error || `Review request failed (${response.status}).`);
       if (!Array.isArray(payload.reviews)) throw new Error('The review service returned an invalid response.');
       node.replaceChildren();
-      const oldCount = node.parentElement.querySelector('.landing-review-count');
-      oldCount?.remove();
       const reviews = payload.reviews.filter(review => typeof review.review_text === 'string' && typeof review.customer_name === 'string' && typeof review.business_name === 'string' && Number(review.rating) >= 1 && Number(review.rating) <= 5);
       if (!reviews.length) {
         const empty = document.createElement('p');
@@ -54,10 +52,6 @@
         card.append(stars, quote, author);
         node.append(card);
       });
-      const count = document.createElement('p');
-      count.className = 'landing-review-count';
-      count.textContent = `${reviews.length} real customer review${reviews.length === 1 ? '' : 's'}`;
-      node.before(count);
     } catch (error) {
       showFailure(error);
     } finally {

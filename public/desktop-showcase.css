@@ -46,13 +46,13 @@
   .landing-copy > .eyebrow { width: max-content; padding: 10px 15px; border: 1px solid #d9bb7059; border-radius: 999px; background: linear-gradient(90deg, #c4903224, #718bd02a); color: #f0d28b; font-size: 12px; letter-spacing: 2px; }
   .landing-copy h1 { max-width: 760px; margin: 28px 0 24px; font-size: clamp(66px, 6.2vw, 94px); line-height: .99; letter-spacing: -5px; }
   .landing-copy > p:not(.eyebrow) { max-width: 690px; color: #c0cadd; font-size: 19px; line-height: 1.78; }
-  .landing-actions { gap: 16px; margin-top: 34px; }
-  .landing-actions .button { min-height: 58px; padding-inline: 24px; border-radius: 10px; font-size: 14px; }
-  .landing-actions .landing-link { padding: 12px 15px; border: 1px solid #52678a; border-radius: 9px; background: #151d2b; color: #e0e8f6; font-size: 12px; }
+  .landing-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 34px; }
+  .landing-actions > * { min-width: 0; min-height: 62px; padding: 10px 12px; border: 1px solid #52678a; border-radius: 10px; background: #151d2b; color: #e0e8f6; font-size: 12px; line-height: 1.35; text-align: center; }
+  .landing-actions .button { min-height: 62px; padding-inline: 15px; border-radius: 10px; font-size: 14px; }
   .landing-actions .landing-link:hover { border-color: #dec47b; background: #242232; color: #fff; }
   .landing-no-card { margin-top: 14px !important; font-size: 12px !important; }
-  .landing-trust { gap: 11px; margin-top: 32px; }
-  .landing-trust span { padding: 11px 14px; border-color: #46536d; border-radius: 999px; background: linear-gradient(120deg, #182334, #181b24); color: #d1dbec; font-size: 11px; }
+  .landing-trust { grid-template-columns: 1fr; justify-items: start; gap: 7px; margin-top: 26px; }
+  .landing-trust span { width: max-content; max-width: 100%; padding: 9px 13px; border-color: #46536d; border-radius: 8px; background: linear-gradient(120deg, #182334, #181b24); color: #d1dbec; font-size: 11px; }
   .landing-preview { padding: 34px; border-color: #657996; border-radius: 22px; background: radial-gradient(ellipse at 100% 0, #bc8b3a2b, transparent 42%), linear-gradient(150deg, #1c2940, #10141c 82%); box-shadow: 0 42px 110px #000a, 0 0 0 7px #ffffff08, 0 0 92px #6280cf30; }
   .landing-preview::before { border-radius: 22px; background: linear-gradient(135deg, #e6c77e66, transparent 36%, #8298cf24 70%, transparent); }
   .preview-top { gap: 12px; font-size: 10px; }
@@ -95,7 +95,8 @@
   .landing-step-grid article > span { width: 40px; height: 40px; font-size: 17px; }
   .landing-step-grid h3 { font-size: 18px; }
   .landing-step-grid p { font-size: 13px; }
-  .landing-pricing-grid { max-width: 1080px; gap: 24px; }
+  .landing-pricing-grid { max-width: 1160px; gap: 26px; padding: 8px 8px 16px; }
+  .landing-pricing-grid > .landing-plan-card { min-height: 420px; }
   .landing-plan-card { min-height: 390px; padding: 32px; border-color: #506381; border-radius: 16px; background: linear-gradient(150deg, #1a2535, #111720); box-shadow: 0 22px 55px #0007; }
   .landing-plan-pro { border-color: #d0ad5e; box-shadow: 0 0 0 1px #d0ad5e66, 0 22px 60px #0008, 0 0 45px #d0ad5e1f; }
   .landing-plan-label { color: #e7ca83; font-size: 11px; letter-spacing: 1.5px; }
