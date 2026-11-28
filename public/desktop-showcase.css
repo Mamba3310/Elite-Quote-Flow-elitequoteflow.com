@@ -97,6 +97,14 @@
   .landing-step-grid p { font-size: 13px; }
   .landing-pricing-grid { max-width: 1160px; gap: 26px; padding: 8px 8px 16px; }
   .landing-pricing-grid > .landing-plan-card { min-height: 420px; }
+  .landing-pricing-grid + .landing-features { margin-top: 84px; }
+  .landing-review-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .team-seat-step { min-height: 48px; font-size: 24px; }
+  .team-seat-select { min-height: 48px; font-size: 18px; }
+  .landing-plan-team > #landing-team-seat-price { font-size: 19px; }
+  .trade-directory-heading { grid-template-columns: minmax(0, 1fr) minmax(260px, 350px); margin-bottom: 30px; }
+  .trade-directory-heading h2 { font-size: clamp(28px, 2.5vw, 38px); }
+  .trade-directory-heading .eyebrow { margin-bottom: 10px; font-size: 11px; }
   .landing-plan-card { min-height: 390px; padding: 32px; border-color: #506381; border-radius: 16px; background: linear-gradient(150deg, #1a2535, #111720); box-shadow: 0 22px 55px #0007; }
   .landing-plan-pro { border-color: #d0ad5e; box-shadow: 0 0 0 1px #d0ad5e66, 0 22px 60px #0008, 0 0 45px #d0ad5e1f; }
   .landing-plan-label { color: #e7ca83; font-size: 11px; letter-spacing: 1.5px; }

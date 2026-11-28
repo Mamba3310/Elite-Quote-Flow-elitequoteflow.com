@@ -2754,8 +2754,13 @@
     teamSeatPrice.textContent = `${seats} seats · $${59 + (seats - 3) * 15}/month`;
   };
   teamSeatInput?.addEventListener('input', updateTeamSeatDisplay);
-  teamSeatInput?.addEventListener('input', updateTeamSeatDisplay);
   teamSeatInput?.addEventListener('change', updateTeamSeatDisplay);
+  document.querySelectorAll('.team-seat-step').forEach(button => button.addEventListener('click', () => {
+    if (!teamSeatInput) return;
+    const current = Number(teamSeatInput.value) || 3;
+    teamSeatInput.value = String(Math.max(3, Math.min(50, current + Number(button.dataset.seatDelta || 0))));
+    updateTeamSeatDisplay();
+  }));
   updateTeamSeatDisplay();
   $('#landing-team-cta').addEventListener('click', () => {
     sessionStorage.setItem('eqf-checkout-plan', 'team_monthly');
