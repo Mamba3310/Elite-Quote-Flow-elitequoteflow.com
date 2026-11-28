@@ -8,7 +8,7 @@
 
   const PRO_LINE_ITEM_LIMIT = 20;
   const SUPABASE_CONFIG = window.QUOTEFlow_SUPABASE_CONFIG;
-  const CURRENCIES = ['USD', 'EUR', 'GBP', 'NGN', 'CAD', 'AUD', 'NZD', 'CHF', 'JPY', 'CNY', 'INR', 'MXN', 'BRL', 'ZAR', 'SGD', 'HKD', 'SEK', 'NOK', 'DKK', 'PLN'];
+  const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'CHF', 'JPY', 'CNY', 'INR', 'MXN', 'BRL', 'ZAR', 'SGD', 'HKD', 'SEK', 'NOK', 'DKK', 'PLN'];
   const isPro = () => Boolean(profile.isPro);
   const openQuoteCount = () => quotes.filter(quote => quote.status === 'sent').length;
   const monthlyQuoteCount = () => {
@@ -31,10 +31,15 @@
     $('#upgrade-strip')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return false;
   };
-  const CURRENCY_SIGNS = { USD: '$', EUR: '€', GBP: '£', NGN: '₦', CAD: 'CA$', AUD: 'A$', NZD: 'NZ$', CHF: 'Fr', JPY: '¥', CNY: '¥', INR: '₹', MXN: 'MX$', BRL: 'R$', ZAR: 'R', SGD: 'S$', HKD: 'HK$', SEK: 'kr', NOK: 'kr', DKK: 'kr', PLN: 'zł' };
+  const CURRENCY_SIGNS = { USD: '$', EUR: '€', GBP: '£', CAD: 'CA$', AUD: 'A$', NZD: 'NZ$', CHF: 'Fr', JPY: '¥', CNY: '¥', INR: '₹', MXN: 'MX$', BRL: 'R$', ZAR: 'R', SGD: 'S$', HKD: 'HK$', SEK: 'kr', NOK: 'kr', DKK: 'kr', PLN: 'zł' };
   const currencyOptions = CURRENCIES.map(code => `<option value="${code}">${code} ${CURRENCY_SIGNS[code]}</option>`).join('');
+  function isCurrencyCode(code) {
+    if (typeof code !== 'string' || !/^[A-Z]{3}$/.test(code)) return false;
+    try { new Intl.NumberFormat(undefined, { style: 'currency', currency: code }); return true; }
+    catch { return false; }
+  }
   function currencySign(code) {
-    const currency = CURRENCIES.includes(code) ? code : 'USD';
+    const currency = isCurrencyCode(code) ? code : 'USD';
     return CURRENCY_SIGNS[currency] || currency;
   }
   function currencyFractionDigits(code) {
@@ -42,7 +47,7 @@
     return new Intl.NumberFormat(undefined, { style: 'currency', currency }).resolvedOptions().maximumFractionDigits;
   }
   function formatMoney(amount, currency = 'USD') {
-    const code = CURRENCIES.includes(currency) ? currency : 'USD';
+    const code = isCurrencyCode(currency) ? currency : 'USD';
     const digits = currencyFractionDigits(code);
     const number = new Intl.NumberFormat(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Number(amount) || 0);
     return `${currencySign(code)}${number}`;
@@ -246,7 +251,7 @@
     es: { name: 'Lucía', image: 'assistant-lucia.webp', ask: 'Preguntar a Lucía', greet: 'Hola, soy Lucía. Esto es lo que puedo hacer:', nudge: 'Soy Lucía. Puedo guiarle.' },
     pt: { name: 'Beatriz', image: 'assistant-beatriz.webp', ask: 'Falar com a Beatriz', greet: 'Olá, eu sou a Beatriz. Veja o que posso fazer:', nudge: 'Eu sou a Beatriz. Posso orientar você.' },
     zh: { name: 'Mei', image: 'assistant-mei.webp', ask: '询问 Mei', greet: '你好，我是 Mei。我可以做这些：', nudge: '我是 Mei。我可以带你了解。' },
-    yo: { name: 'Sinmisola', image: 'assistant-sinmisola.webp', ask: 'Bèèrè lọ́wọ́ Sinmisola', greet: 'Báwo, èmi ni Sinmisola. Èyí ni ohun tí mo lè ṣe:', nudge: 'Èmi ni Sinmisola. Mo lè ṣe àfihàn rẹ̀ fún ọ.' }
+
   };
   function applyAssistant() {
     const code = (document.documentElement.lang || 'en').slice(0, 2);
@@ -1752,7 +1757,7 @@
       return;
     }
     const detected = await detectVisitorCurrency();
-    setCalculatorCurrency(detected || (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Africa/Lagos' || Intl.DateTimeFormat().resolvedOptions().locale?.endsWith('-NG') ? 'NGN' : 'USD'), false);
+    setCalculatorCurrency(detected || 'USD', false);
   }
 
   async function detectVisitorCurrency() {
@@ -2774,7 +2779,7 @@
     const lift = Math.max(0, Math.min(50, Number($('#lead-calc-lift').value) || 0));
     const extraWon = quotes * lift / 100;
     const opportunity = Math.round(extraWon * amount * 100) / 100;
-    const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: Intl.DateTimeFormat().resolvedOptions().locale?.endsWith('-NG') ? 'NGN' : 'USD', maximumFractionDigits: 0 }).format(opportunity);
+    const money = new Intl.NumberFormat(undefined, { style: 'currency', currency: isCurrencyCode(profile.defaultCurrency) ? profile.defaultCurrency : 'USD', maximumFractionDigits: 0 }).format(opportunity);
     $('#lead-calc-result').textContent = money;
     $('#lead-calc-copy').textContent = `${extraWon.toFixed(1)} additional accepted quotes per month in this scenario (${rate}% current acceptance + ${lift} percentage points).`;
   };

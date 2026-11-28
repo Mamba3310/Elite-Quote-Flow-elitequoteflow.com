@@ -7,7 +7,7 @@ alter table public.profiles
 
 alter table public.profiles drop constraint if exists profiles_default_currency_check;
 alter table public.profiles add constraint profiles_default_currency_check
-  check (default_currency in ('USD','EUR','GBP','NGN','CAD','AUD','NZD','CHF','JPY','CNY','INR','MXN','BRL','ZAR','SGD','HKD','SEK','NOK','DKK','PLN'));
+  check (default_currency in ('USD','EUR','GBP','CAD','AUD','NZD','CHF','JPY','CNY','INR','MXN','BRL','ZAR','SGD','HKD','SEK','NOK','DKK','PLN'));
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -22,7 +22,7 @@ begin
     left(coalesce(new.raw_user_meta_data ->> 'business_name', ''), 100),
     left(coalesce(new.raw_user_meta_data ->> 'phone', ''), 30),
     left(coalesce(new.raw_user_meta_data ->> 'company_address', ''), 300),
-    case when coalesce(new.raw_user_meta_data ->> 'default_currency', 'USD') in ('USD','EUR','GBP','NGN','CAD','AUD','NZD','CHF','JPY','CNY','INR','MXN','BRL','ZAR','SGD','HKD','SEK','NOK','DKK','PLN')
+    case when coalesce(new.raw_user_meta_data ->> 'default_currency', 'USD') in ('USD','EUR','GBP','CAD','AUD','NZD','CHF','JPY','CNY','INR','MXN','BRL','ZAR','SGD','HKD','SEK','NOK','DKK','PLN')
       then coalesce(new.raw_user_meta_data ->> 'default_currency', 'USD') else 'USD' end
   );
   return new;

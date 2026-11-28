@@ -4,7 +4,7 @@ const json = (body, status = 200) => Response.json(body, {
 });
 
 const COUNTRY_CURRENCY = {
-  US: 'USD', NG: 'NGN', GB: 'GBP', CA: 'CAD', AU: 'AUD', NZ: 'NZD',
+  US: 'USD', GB: 'GBP', CA: 'CAD', AU: 'AUD', NZ: 'NZD',
   CH: 'CHF', JP: 'JPY', CN: 'CNY', IN: 'INR', MX: 'MXN', BR: 'BRL',
   ZA: 'ZAR', SG: 'SGD', HK: 'HKD', SE: 'SEK', NO: 'NOK', DK: 'DKK', PL: 'PLN',
   AT: 'EUR', BE: 'EUR', CY: 'EUR', DE: 'EUR', EE: 'EUR', ES: 'EUR', FI: 'EUR',
@@ -19,7 +19,7 @@ export function currencyForCountry(country) {
 export function visitorCountry(request) {
   const hinted = request?.cf?.country || request?.headers?.get?.('CF-IPCountry') || '';
   const country = String(hinted).trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(country) || country === 'XX' || country === 'T1') return '';
+  if (!/^[A-Z]{2}$/.test(country) || country === 'XX' || country === 'T1' || !Object.hasOwn(COUNTRY_CURRENCY, country)) return '';
   return country;
 }
 

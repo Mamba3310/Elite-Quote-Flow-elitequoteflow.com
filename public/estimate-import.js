@@ -3,8 +3,8 @@
 
   const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
   const PHONE_RE = /(?:(?:\+|00)?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)\d{3,4}[\s.-]?\d{3,4}\b/;
-  const LABELED_TOTAL_RE = /(?:grand\s*total|quote\s*total|invoice\s*total|amount\s*due|balance\s*due|total\s*due|\btotal\b)\s*[:\-]?\s*(?:(?:USD|EUR|GBP|NGN|CAD|AUD|\$|£|€)\s*)?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i;
-  const CURRENCY_HINT_RE = /\b(USD|EUR|GBP|NGN|CAD|AUD|NZD|CHF|JPY|CNY|INR|MXN|BRL|ZAR|SGD|HKD|SEK|NOK|DKK|PLN)\b|[£€$]/i;
+  const LABELED_TOTAL_RE = /(?:grand\s*total|quote\s*total|invoice\s*total|amount\s*due|balance\s*due|total\s*due|\btotal\b)\s*[:\-]?\s*(?:(?:USD|EUR|GBP|CAD|AUD|\$|£|€)\s*)?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i;
+  const CURRENCY_HINT_RE = /\b(USD|EUR|GBP|CAD|AUD|NZD|CHF|JPY|CNY|INR|MXN|BRL|ZAR|SGD|HKD|SEK|NOK|DKK|PLN)\b|[£€$]/i;
   const CUSTOMER_LABEL_RE = /(?:bill\s*to|customer(?:\s*name)?|client(?:\s*name)?|prepared\s*for|sold\s*to|attention|attn)\s*[:\-]\s*(.+)/i;
   const SERVICE_LABEL_RE = /(?:service(?:\s*description)?|description|job(?:\s*title)?|scope(?:\s*of\s*work)?|project(?:\s*name)?|work\s*requested)\s*[:\-]\s*(.+)/i;
 

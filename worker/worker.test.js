@@ -100,7 +100,7 @@ test('admin quote status control is owner-protected and records audited updates'
 
 test('sidebar promotes the AI assistant without the redundant growth slogan card',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const css=await readFile(new URL('../public/styles.css',import.meta.url),'utf8');const assistant=await readFile(new URL('../public/ai-assistant.css',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
- assert.match(html,/id="support-launch"/);assert.match(html,/>Stacey</);assert.match(html,/Ask Stacey/);assert.doesNotMatch(html,/Olivia|Elite Quote Flow AI/);assert.match(html,/id="help-nudge"/);assert.match(html,/assistant-stacey\.webp/);assert.match(app,/assistant-sinmisola\.webp/);assert.match(app,/name: 'Sinmisola'/);assert.match(html,/class="support-capabilities"/);assert.match(html,/Here’s what I can do/);assert.doesNotMatch(html,/Ask about quotes, follow-ups, bookings/);assert.match(assistant,/\.ai-avatar\{[^}]*width:68px/);assert.match(assistant,/\.ai-avatar-large\{width:84px/);assert.doesNotMatch(html,/M16 4v4/);assert.match(app,/function playHelpChime/);assert.match(app,/function offerHelpNudge/);assert.match(app,/setTimeout\(offerHelpNudge, 30000\)/);assert.match(html,/assistant-stacey\.webp" alt="" width="512"/);assert.doesNotMatch(html,/ai-online-dot/);assert.match(assistant,/\.ai-avatar i\{[^}]*width:16px/);assert.match(html,/class="sidebar-bottom"/);assert.match(html,/class="help-card support-launch"/);assert.doesNotMatch(html,/class="topbar-ask/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.desk-rail\{grid-column:1/);assert.match(css,/320px minmax\(0,1fr\)/);assert.match(css,/\.page-content>\*\{grid-column:2/);assert.match(css,/min-height:calc\(100vh - 118px\)/);assert.doesNotMatch(html,/class="free-rail"/);assert.match(html,/id="import-estimate-button"/);assert.match(html,/id="invite-button"/);assert.doesNotMatch(html,/Included with every account/);assert.doesNotMatch(html,/class="breadcrumb"/);assert.match(html,/class="workspace-heading"/);assert.doesNotMatch(html,/<p>Workspace<\/p>/);assert.match(html,/>QUOTE DESK</);assert.ok(html.indexOf('id="desk-actions"') < html.indexOf('id="takeout-bar"') && html.indexOf('id="takeout-bar"') < html.indexOf('id="upgrade-strip"'));assert.match(app,/CURRENCIES\.includes\(calculatorCurrency\)/);
+ assert.match(html,/id="support-launch"/);assert.match(html,/>Stacey</);assert.match(html,/Ask Stacey/);assert.doesNotMatch(html,/Olivia|Elite Quote Flow AI|Sinmisola|Yorùbá/i);assert.match(html,/id="help-nudge"/);assert.match(html,/assistant-stacey\.webp/);assert.doesNotMatch(app,/assistant-sinmisola\.webp|name: 'Sinmisola'/);assert.match(html,/class="support-capabilities"/);assert.match(html,/Here’s what I can do/);assert.doesNotMatch(html,/Ask about quotes, follow-ups, bookings/);assert.match(assistant,/\.ai-avatar\{[^}]*width:68px/);assert.match(assistant,/\.ai-avatar-large\{width:84px/);assert.doesNotMatch(html,/M16 4v4/);assert.match(app,/function playHelpChime/);assert.match(app,/function offerHelpNudge/);assert.match(app,/setTimeout\(offerHelpNudge, 30000\)/);assert.match(html,/assistant-stacey\.webp" alt="" width="512"/);assert.doesNotMatch(html,/ai-online-dot/);assert.match(assistant,/\.ai-avatar i\{[^}]*width:16px/);assert.match(html,/class="sidebar-bottom"/);assert.match(html,/class="help-card support-launch"/);assert.doesNotMatch(html,/class="topbar-ask/);assert.match(html,/class="pro-rail"/);assert.doesNotMatch(html,/Small steps, steady growth|Keep every estimate moving with a thoughtful follow-up/);assert.match(css,/\.page-content>\.desk-rail\{grid-column:1/);assert.match(css,/320px minmax\(0,1fr\)/);assert.match(css,/\.page-content>\*\{grid-column:2/);assert.match(css,/min-height:calc\(100vh - 118px\)/);assert.doesNotMatch(html,/class="free-rail"/);assert.match(html,/id="import-estimate-button"/);assert.match(html,/id="invite-button"/);assert.doesNotMatch(html,/Included with every account/);assert.doesNotMatch(html,/class="breadcrumb"/);assert.match(html,/class="workspace-heading"/);assert.doesNotMatch(html,/<p>Workspace<\/p>/);assert.match(html,/>QUOTE DESK</);assert.ok(html.indexOf('id="desk-actions"') < html.indexOf('id="takeout-bar"') && html.indexOf('id="takeout-bar"') < html.indexOf('id="upgrade-strip"'));assert.match(app,/CURRENCIES\.includes\(calculatorCurrency\)/);
  assert.match(app,/Email verified\. Sign in to open your desk\./);assert.match(app,/verifyOtp\(\{ token_hash: callback\.tokenHash, type: callback\.type \}\)/);assert.match(app,/function renderAcceptedTotal/);assert.match(app,/renderAcceptedTotal\(\$\('#metric-won'\), wonThisMonth\)/);assert.match(css,/\.metric-value\.is-split/);assert.match(css,/\.metric-currency-line/);
 });
 
@@ -119,27 +119,27 @@ test('sidebar lists desk features and keeps Pro tools visible with a PRO badge',
  assert.match(html,/id="takeout-bar"/);assert.match(html,/id="branded-email-dialog"/);assert.match(html,/rel="icon" href="\/favicon.svg"/);assert.match(app,/function showBrandedEmail/);assert.match(app,/action === 'branded-email'/);assert.match(css,/\.sidebar\{position:fixed[^}]*width:300px/);
 });
 
-test('language switch sits beside cloud sync and includes Yoruba and Chinese',async()=>{
+test('language switch sits beside cloud sync and offers supported interface languages',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const i18n=await readFile(new URL('../public/i18n.js',import.meta.url),'utf8');
  const top=html.slice(html.indexOf('class="topbar"'), html.indexOf('class="page-content"'));
  assert.ok(top.indexOf('class="cloud-sync"')>=0 && top.indexOf('class="cloud-sync"')<top.indexOf('class="language-switch"') && top.indexOf('class="language-switch"')<top.indexOf('id="header-profile-button"'));
- assert.match(html,/src="i18n.js"/);assert.match(i18n,/Yorùbá/);assert.match(i18n,/中文/);assert.match(i18n,/Wọlé/);assert.match(i18n,/\['yo', 'Yorùbá', 'ng'\]/);assert.match(html,/flags\/us\.svg|language-switch/);assert.match(i18n,/flags\/\$\{flag\}\.svg/);
+ assert.match(html,/src="i18n.js"/);assert.match(i18n,/Français/);assert.match(i18n,/Español/);assert.match(i18n,/Português/);assert.doesNotMatch(i18n,/Yorùbá|\['yo'/);assert.match(i18n,/中文/);assert.match(i18n,/登录/);assert.match(i18n,/const LANGUAGES = \[[\s\S]*?\['zh', '中文', 'cn'\]/);assert.doesNotMatch(i18n,/Yorùbá|Sinmisola|ng\.svg|\['yo'/);assert.doesNotMatch(i18n,/Yorùbá|\['yo'|current !== 'yo'|ng\.svg/);assert.match(html,/flags\/us\.svg|language-switch/);assert.match(i18n,/flags\/\$\{flag\}\.svg/);
 });
 
 test('calculator currency control offers supported currencies and updates results and estimate currency',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
  assert.match(html,/<select id="calc-currency" class="calculator-badge" aria-label="Calculator currency"><\/select>/);assert.match(html,/id="calc-currency-symbol-rate"/);assert.match(html,/id="calc-currency-symbol-materials"/);
- assert.match(app,/\$\('#calc-currency'\)\.innerHTML = currencyOptions/);assert.match(app,/addEventListener\('change', event => setCalculatorCurrency\(event\.currentTarget\.value\)\)/);assert.match(app,/formatMoney\(price, calculatorCurrency\)/);assert.match(app,/form\.elements\.currency\.value = calculatorCurrency/);assert.match(app,/CALCULATOR_CURRENCY_KEY/);assert.match(app,/\['USD', 'EUR', 'GBP', 'NGN'/);
+ assert.match(app,/\$\('#calc-currency'\)\.innerHTML = currencyOptions/);assert.match(app,/addEventListener\('change', event => setCalculatorCurrency\(event\.currentTarget\.value\)\)/);assert.match(app,/formatMoney\(price, calculatorCurrency\)/);assert.match(app,/form\.elements\.currency\.value = calculatorCurrency/);assert.match(app,/CALCULATOR_CURRENCY_KEY/);assert.match(app,/\['USD', 'EUR', 'GBP', 'CAD'/);assert.doesNotMatch(app,/NGN|Africa\/Lagos|-NG/);assert.match(app,/isCurrencyCode\(code\)/);
 });
 
-test('Nigerian defaults, optional tax ID profile, and tax-aware invoice exports are wired up',async()=>{
+test('generic tax ID profile and tax-aware invoice exports are supported',async()=>{
  const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const schema=await readFile(new URL('../supabase-schema.sql',import.meta.url),'utf8');const migration=await readFile(new URL('../supabase-sale-ready-migration.sql',import.meta.url),'utf8');
- assert.ok(app.includes("'Africa/Lagos'"));assert.ok(app.includes("endsWith('-NG') ? 'NGN' : 'USD'"));assert.ok(html.includes('name="taxId" maxlength="32"'));assert.ok(app.includes('seller_tax_id: profile.taxId'));assert.ok(app.includes('tax_amount: (taxableSubtotal * taxRate / 100).toFixed(2)'));assert.ok(schema.includes("tax_id text not null default ''"));assert.ok(migration.includes("add column if not exists tax_id text not null default ''"));
+ assert.ok(!app.includes('Africa/Lagos'));assert.ok(!app.includes('NGN'));assert.ok(!html.toLowerCase().includes('nigeria'));assert.match(schema,/profiles_default_currency_check check \(default_currency in \('USD','EUR','GBP','CAD'/);assert.ok(html.includes('name="taxId" maxlength="32"'));assert.ok(html.includes('Tax ID (optional)'));assert.ok(app.includes('seller_tax_id: profile.taxId'));assert.ok(app.includes('tax_amount: (taxableSubtotal * taxRate / 100).toFixed(2)'));assert.ok(schema.includes("tax_id text not null default ''"));assert.ok(migration.includes("add column if not exists tax_id text not null default ''"));
 });
 
-test('Nigerian naira is available for quotes, templates, and calculator pricing',async()=>{
+test('currency selector offers configured currencies for quotes, templates, and calculator pricing',async()=>{
  const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
- assert.match(app,/\['USD', 'EUR', 'GBP', 'NGN'/);assert.match(app,/currencyOptions/);assert.match(app,/formatMoney\(price, calculatorCurrency\)/);assert.match(app,/NGN: '₦'/);assert.match(app,/CNY: '¥'/);assert.match(app,/EUR: '€'/);assert.match(app,/BRL: 'R\$'/);assert.match(app,/INR: '₹'/);assert.match(app,/function currencySign/);assert.match(html,/id="calc-currency"/);assert.match(html,/class="currency-select"/);
+ assert.match(app,/\['USD', 'EUR', 'GBP', 'CAD'/);assert.doesNotMatch(app,/NGN|Nigerian|Africa\/Lagos/);assert.match(await readFile(new URL('../worker/visitor-locale.js',import.meta.url),'utf8'),/!Object\.hasOwn\(COUNTRY_CURRENCY, country\)/);assert.match(app,/currencyOptions/);assert.match(app,/formatMoney\(price, calculatorCurrency\)/);assert.doesNotMatch(app,/NGN:|₦/);assert.match(app,/CNY: '¥'/);assert.match(app,/EUR: '€'/);assert.match(app,/BRL: 'R\$'/);assert.match(app,/INR: '₹'/);assert.match(app,/function currencySign/);assert.match(html,/id="calc-currency"/);assert.match(html,/class="currency-select"/);
 });
 
 test('owner analytics reports aggregate quote views and decisions by country',async()=>{
@@ -151,19 +151,19 @@ test('owner analytics reports aggregate quote views and decisions by country',as
 
 test('visitor IP addresses are stored and returned only to the admin analytics view',async()=>{
  const events=[];
- const env={SITE_ANALYTICS:{writeDataPoint:event=>events.push(event),query:async sql=>sql.includes('blob6 AS ip')?{data:[{ip:'203.0.113.9',country:'NG',path:'/',event:'pageview',visits:2},{ip:'not-an-ip',country:'US',path:'/',event:'pageview',visits:1}]}:{data:[{visits:1},{source:'direct',visits:1},{country:'NG',visits:1},{views:0},{decision:'accepted',decisions:0},{hour:'2025-01-01 10:00:00',visits:1},{path:'/',visits:1}]}},SUPABASE_URL:baseEnv.SUPABASE_URL,SUPABASE_ANON_KEY:baseEnv.SUPABASE_ANON_KEY,OWNER_ANALYTICS_EMAIL:'owner@example.com'};
+ const env={SITE_ANALYTICS:{writeDataPoint:event=>events.push(event),query:async sql=>sql.includes('blob6 AS ip')?{data:[{ip:'203.0.113.9',country:'CA',path:'/',event:'pageview',visits:2},{ip:'not-an-ip',country:'CA',path:'/',event:'pageview',visits:1}]}:{data:[{visits:1},{source:'direct',visits:1},{country:'CA',visits:1},{views:0},{decision:'accepted',decisions:0},{hour:'2025-01-01 10:00:00',visits:1},{path:'/',visits:1}]}},SUPABASE_URL:baseEnv.SUPABASE_URL,SUPABASE_ANON_KEY:baseEnv.SUPABASE_ANON_KEY,OWNER_ANALYTICS_EMAIL:'owner@example.com'};
  await withMockedFetch(async url=>{if(String(url).endsWith('/auth/v1/user'))return Response.json({email:'owner@example.com'});assert.fail(`Unexpected upstream ${url}`);},async()=>{
-  const recorded=await worker.fetch(jsonRequest('https://elitequoteflow.com/api/analytics',{event:'pageview',path:'/',referrer:'https://search.example/'},'POST',{'CF-Connecting-IP':'203.0.113.9','CF-IPCountry':'NG'}),env);
+  const recorded=await worker.fetch(jsonRequest('https://elitequoteflow.com/api/analytics',{event:'pageview',path:'/',referrer:'https://search.example/'},'POST',{'CF-Connecting-IP':'203.0.113.9','CF-IPCountry':'CA'}),env);
   const recordedBody=await recorded.json();assert.equal(recorded.status,202);assert.equal(recordedBody.received,true);assert.equal(recordedBody.ip,undefined);assert.doesNotMatch(JSON.stringify(recordedBody),/203/);
-  const locale=await worker.fetch(new Request('https://elitequoteflow.com/api/visitor-locale',{headers:{'CF-IPCountry':'NG','CF-Connecting-IP':'203.0.113.9'}}),env);
-  const localeBody=await locale.json();assert.equal(locale.status,200);assert.equal(localeBody.currency,'NGN');assert.equal(localeBody.ip,undefined);
+  const locale=await worker.fetch(new Request('https://elitequoteflow.com/api/visitor-locale',{headers:{'CF-IPCountry':'CA','CF-Connecting-IP':'203.0.113.9'}}),env);
+  const localeBody=await locale.json();assert.equal(locale.status,200);assert.equal(localeBody.currency,'CAD');assert.equal(localeBody.country,'CA');assert.equal(localeBody.ip,undefined);
   const hidden=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics',{headers:{Authorization:`Bearer ${ownerToken}`}}),env);
   assert.equal((await hidden.json()).visitors,undefined);
   const denied=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics?detail=ips'),env);
   assert.equal(denied.status,403);
   const shown=await worker.fetch(new Request('https://elitequoteflow.com/api/analytics?detail=ips',{headers:{Authorization:`Bearer ${ownerToken}`}}),env);
   const body=await shown.json();
-  assert.equal(shown.status,200);assert.deepEqual(body.visitors,[{ip:'203.0.113.9',country:'NG',path:'/',event:'pageview',visits:2}]);
+  assert.equal(shown.status,200);assert.deepEqual(body.visitors,[{ip:'203.0.113.9',country:'CA',path:'/',event:'pageview',visits:2}]);
  });
  assert.equal(events[0].blobs[5],'203.0.113.9');
  const admin=await worker.fetch(new Request('https://elitequoteflow.com/admin'),baseEnv);const page=await admin.text();
@@ -304,13 +304,13 @@ test('dashboard advertises Solo plan options and the paid $4.99 trial',async()=>
  assert.match(app,/\/api\/create-checkout-session/);
 });
 
-test('24/7 AI support endpoint validates methods, messages, and calls the configured model', async () => {
+test('24/7 AI support endpoint validates methods, messages, calls the model, and injects Stacey prompt', async () => {
  const missing=await worker.fetch(new Request('https://app.example/api/support-chat',{method:'GET'}),{});assert.equal(missing.status,405);
  const malformed=await worker.fetch(jsonRequest('https://app.example/api/support-chat',{messages:[{role:'user',content:'x'.repeat(2001)}]}),{});assert.equal(malformed.status,400);
  let requestMessages;
  const AI={run:async(_model,payload)=>{requestMessages=payload.messages;return {response:'Use the New quote button to get started.'};}};
  const response=await worker.fetch(jsonRequest('https://app.example/api/support-chat',{messages:[{role:'user',content:'How do I create a quote?'}]}),{AI});
- assert.equal(response.status,200);assert.equal((await response.json()).reply,'Use the New quote button to get started.');assert.match(requestMessages[0].content,/available any time/);assert.equal(requestMessages.at(-1).content,'How do I create a quote?');
+ assert.equal(response.status,200);assert.equal((await response.json()).reply,'Use the New quote button to get started.');assert.match(requestMessages[0].content,/You are Stacey, the friendly, practical customer support and onboarding assistant/);assert.match(requestMessages[0].content,/Starter Desk: \$0\/month, free forever/);assert.match(requestMessages[0].content,/14-day Pro trial: \$4\.99 upfront/);assert.match(requestMessages[0].content,/Solo Pro: \$29\/month or \$249\/year/);assert.match(requestMessages[0].content,/Crew & Team: \$59\/month, includes 3 user seats, plus \$15\/month per additional seat/);assert.match(requestMessages[0].content,/Account Settings -> Manage Subscription/);assert.match(requestMessages[0].content,/support@elitequoteflow\.com/);assert.doesNotMatch(requestMessages[0].content,/Nigeria|NGN|Yoruba/);assert.equal(requestMessages.at(-1).content,'How do I create a quote?');
 });
 
 test('AI drafting reports fallback instead of treating fallback guidance as generated scope text',async()=>{
@@ -905,11 +905,11 @@ test('Team subscription cancellation disables access and reconciles reserved sea
 
 test('adaptive pricing lifetime checkout still grants Pro from the US dollar amount',async()=>{
  const {lifetimeIntegrationCents}=await import('./stripe-webhook.js');
- assert.equal(lifetimeIntegrationCents({currency:'usd',amount_total:14999,presentment_details:{presentment_amount:24000000,presentment_currency:'ngn'}}),14999);
+ assert.equal(lifetimeIntegrationCents({currency:'usd',amount_total:14999,presentment_details:{presentment_amount:24000000,presentment_currency:'cad'}}),14999);
  assert.equal(lifetimeIntegrationCents({currency:'eur',amount_total:14000,currency_conversion:{source_currency:'usd',amount_total:14999}}),14999);
  assert.equal(lifetimeIntegrationCents({currency:'eur',amount_total:14000}),null);
  const timestamp=Math.floor(Date.now()/1000);
- const body=JSON.stringify({id:'evt_lifetime_local',type:'checkout.session.completed',livemode:true,data:{object:{id:'cs_lifetime_local',mode:'payment',payment_status:'paid',client_reference_id:'user1',payment_link:'plink_lifetime',amount_total:14999,currency:'usd',customer:'cus_lifetime',presentment_details:{presentment_amount:24000000,presentment_currency:'ngn'}}}});
+ const body=JSON.stringify({id:'evt_lifetime_local',type:'checkout.session.completed',livemode:true,data:{object:{id:'cs_lifetime_local',mode:'payment',payment_status:'paid',client_reference_id:'user1',payment_link:'plink_lifetime',amount_total:14999,currency:'usd',customer:'cus_lifetime',presentment_details:{presentment_amount:20000,presentment_currency:'cad'}}}});
  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(baseEnv.STRIPE_WEBHOOK_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']);
  const signatureBytes=await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${timestamp}.${body}`));
  const signature=`t=${timestamp},v1=${[...new Uint8Array(signatureBytes)].map(byte=>byte.toString(16).padStart(2,'0')).join('')}`;
