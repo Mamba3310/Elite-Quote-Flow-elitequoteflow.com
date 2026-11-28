@@ -5,6 +5,7 @@ import { onPublicQuoteRequest } from './public-quote.js';
 import { onAnalyticsRequest } from './site-analytics.js';
 import { runScheduled } from './scheduled.js';
 import { onDepositCheckout } from './deposit-checkout.js';
+import { onConnectOnboarding } from './connect-onboarding.js';
 import { onInvoiceCheckout } from './invoice-checkout.js';
 import { onSendQuoteEmail } from './send-quote-email.js';
 import { onSendCustomerMessage } from './send-customer-message.js';
@@ -79,6 +80,7 @@ export default {
     if (url.pathname === '/api/analytics') return onAnalyticsRequest(request, env);
     if (url.pathname === '/api/support-chat') return onSupportChat(request, env);
     if (url.pathname === '/api/customer-reviews') return onCustomerReview(request, env);
+    if (url.pathname === '/api/connect-onboarding') return onConnectOnboarding(request, env);
     if (url.pathname === '/api/deposit-checkout') {
       if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
       return onDepositCheckout(request, env);

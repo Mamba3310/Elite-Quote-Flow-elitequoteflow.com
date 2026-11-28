@@ -407,7 +407,7 @@
       ? 'Pro tools are unlocked so your team can cross-check quotes, email, and the rest of the desk. This is not a paid subscription.'
       : profile.isPro
       ? profile.isLifetime ? 'Your one-time purchase gives you permanent access to all Pro tools.' : 'Your Pro tools are ready. Manage billing or cancel your subscription securely.'
-      : `Starter Desk includes five quotes per month and unlimited line items. Solo Pro is $29/month or $249/year. The $4.99 Pro trial requires a card and renews at $29/month after 14 days unless canceled. You have ${monthlyQuoteCount()}/${FREE_MONTHLY_QUOTE_LIMIT} quotes this month.`;
+      : `Starter Desk includes five quotes per month and up to 20 line items. Solo Pro is $29/month or $249/year. The $4.99 Pro trial requires a card and renews at $29/month after 14 days unless canceled. You have ${monthlyQuoteCount()}/${FREE_MONTHLY_QUOTE_LIMIT} quotes this month.`;
     const monthlyButton = $('#upgrade-monthly-link');
     const lifetimeButton = $('#upgrade-lifetime-link');
     const manageButton = $('#upgrade-pro-link');
@@ -437,7 +437,7 @@
     const freeLimitNote = $('#free-limit-note');
     if (freeLimitNote) {
       freeLimitNote.hidden = Boolean(profile.isPro);
-      freeLimitNote.textContent = `Starter Desk includes ${FREE_MONTHLY_QUOTE_LIMIT} quotes per month and unlimited line items. You have ${monthlyQuoteCount()} of ${FREE_MONTHLY_QUOTE_LIMIT} quotes this month. Upgrade for deposits, reminders, branding, and more.`;
+      freeLimitNote.textContent = `Starter Desk includes ${FREE_MONTHLY_QUOTE_LIMIT} quotes per month and up to 20 line items. You have ${monthlyQuoteCount()} of ${FREE_MONTHLY_QUOTE_LIMIT} quotes this month. Upgrade for deposits, reminders, branding, and more.`;
     }
     $('#header-profile-name').textContent = name;
     $('#header-profile-name').title = name;
@@ -2735,6 +2735,25 @@
   }));
   const walkthrough = $('#product-walkthrough');
   $('#landing-demo-video').addEventListener('click', () => walkthrough.showModal());
+  const landingMenu = $('#landing-menu');
+  landingMenu?.addEventListener('click', () => {
+    const open = landingMenu.closest('.landing-nav').classList.toggle('is-open');
+    landingMenu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  $('#payout-setup')?.addEventListener('click', async () => {
+    const button = $('#payout-setup');
+    button.disabled = true;
+    try {
+      const headers = await authHeaders();
+      const response = await fetch('/api/connect-onboarding', { method: 'POST', headers, body: JSON.stringify({ country: $('#payout-country').value }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not start payout setup.');
+      window.location.assign(result.url);
+    } catch (error) {
+      showToast(error.message);
+      button.disabled = false;
+    }
+  });
   $('#walkthrough-close').addEventListener('click', () => walkthrough.close());
   $('#walkthrough-start').addEventListener('click', () => { walkthrough.close(); showRegistration(); });
   walkthrough.addEventListener('click', event => { if (event.target === walkthrough) walkthrough.close(); });

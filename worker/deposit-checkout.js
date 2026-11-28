@@ -1,4 +1,5 @@
 import { json, requireProUser, readJson } from './pro-access.js';
+import { payoutDestinationFields, requirePayoutAccount } from './payout-account.js';
 
 export async function onDepositCheckout(request, env) {
   if (!env.STRIPE_SECRET_KEY?.trim()) return json({ error: 'Deposit checkout is not configured.' }, 503);
@@ -22,6 +23,8 @@ export async function onDepositCheckout(request, env) {
   catch { return json({ error: 'Quote currency is not supported by Stripe.' }, 400); }
   const amount = Math.round(Number(quote.amount) * Number(quote.deposit_percent) / 100 * (10 ** fractionDigits));
   if (!Number.isSafeInteger(amount) || amount <= 0) return json({ error: 'Deposit amount is invalid.' }, 400);
+  const payout = await requirePayoutAccount(access, env);
+  if (payout.error) return payout.error;
 
   const origin = new URL(request.url).origin;
   const form = new URLSearchParams({
@@ -34,7 +37,8 @@ export async function onDepositCheckout(request, env) {
     'line_items[0][price_data][product_data][name]': `Deposit: ${quote.service}`,
     'metadata[quote_id]': quote.id,
     'metadata[supabase_user_id]': access.user.id,
-    'metadata[payment_type]': 'deposit'
+    'metadata[payment_type]': 'deposit',
+    ...payoutDestinationFields(payout.id)
   });
   if (quote.email) form.set('customer_email', quote.email);
   const idempotencyKey = `eqf-deposit-${quote.id}-${amount}-${encodeURIComponent(payload.publicToken)}`;
