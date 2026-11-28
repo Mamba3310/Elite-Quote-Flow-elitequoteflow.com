@@ -1,7 +1,7 @@
 /* Refined landing page and account entry */
 .landing-screen{background:radial-gradient(ellipse at 82% 28%,#22396855 0,transparent 34%),radial-gradient(ellipse at 9% 75%,#172c2940 0,transparent 35%),#090c12}
 .landing-nav{height:82px;border-bottom-color:#ffffff12}
-.landing-nav .brand{font-size:19px}
+.landing-nav .brand{font-size:19px}.landing-brand-name{display:grid;gap:1px;line-height:1.05}.landing-brand-name small{color:#a9beff;font-size:8px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase}.landing-nav .brand .landing-brand-name{font-size:inherit}
 .landing-nav .button{min-height:40px;padding-inline:17px;font-size:11px}
 .landing-hero{max-width:1190px;min-height:610px;gap:clamp(38px,7vw,90px);padding-top:86px;padding-bottom:76px}
 .landing-copy>.eyebrow{display:flex;align-items:center;gap:9px;color:#a8bdf5;font-size:10px;letter-spacing:1.55px}
@@ -29,7 +29,7 @@
 .landing-features article>span{font-size:10px}
 .landing-features h2{font-size:15px}
 .landing-features p{color:#a6b1c1;font-size:11px}
-.landing-footer{border-top-color:#ffffff14;font-size:9px}
+.landing-footer{border-top-color:#ffffff14;font-size:9px}.landing-footer{display:grid;justify-items:center;gap:5px}.landing-footer-brand{color:#eef2f8;font:700 14px var(--display)}.landing-footer small{color:#a9beff;font-size:8px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase}.landing-brand-name small{display:block}.landing-nav .landing-brand-name{white-space:normal}
 .auth-screen{background:radial-gradient(ellipse at 50% 10%,#21335a80 0,transparent 46%),#090c12}
 .auth-card{width:min(440px,100%);padding:38px;border-color:#30394a;border-radius:15px;background:linear-gradient(155deg,#151a24,#10141b 72%);box-shadow:0 28px 85px #0009}
 .auth-brand{margin-bottom:37px}
