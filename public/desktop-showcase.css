@@ -37,6 +37,16 @@
   .landing-nav { width: min(100%, 1480px); height: 98px; padding: 0 56px; border-bottom-color: #d6b97840; }
   .landing-nav .brand { gap: 13px; font-size: 22px; }
   .landing-nav .brand-mark { width: 46px; height: 46px; border-radius: 13px; }
+  .landing-nav .brand-name { font-size: 22px; letter-spacing: .2px; }
+  .landing-nav .brand-name small { display: block; margin-top: 5px; color: #e4d8b4; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; }
+  .auth-brand .brand-name { font-size: 21px; letter-spacing: .2px; }
+  .landing-nav .brand-name small, .auth-brand .brand-name small { display: block; margin-top: 5px; color: #e4d8b4; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; }
+  .landing-footer-brandrow .brand-mark { width: 58px; height: 58px; font-size: 18px; }
+  .landing-footer-brandrow .brand-name { font-size: 26px; }
+  .landing-footer-brandrow .brand-name small { margin-top: 7px; font-size: 13px; }
+  .landing-founder-note { max-width: 760px; padding: 28px 36px; }
+  .landing-founder-note .eyebrow { font-size: 11px; }
+  .landing-founder-note p { font-size: 17px; }
   .landing-nav > div { gap: 16px; }
   .landing-nav .landing-trade-nav-label { gap: 10px; padding: 8px 11px; border-color: #806e49; background: #171a20; font-size: 11px; }
   .landing-nav .landing-trade-nav-select { max-width: 220px; min-height: 38px; padding-inline: 11px; border-color: #657da8; font-size: 12px; }
@@ -119,4 +129,11 @@
   .landing-review-card blockquote { margin: 12px 0 16px; font-size: 13px; line-height: 1.65; }
   .landing-review-avatar { width: 32px; height: 32px; }
   .landing-review-disclaimer { margin-top: 10px; }
+  .landing-footer { max-width: 1320px; gap: 30px; margin-top: 58px; padding: 44px 56px 58px; }
+  .landing-footer-brandrow .brand-mark { width: 58px; height: 58px; font-size: 18px; }
+  .landing-footer-brandrow .brand-name { font-size: 26px; }
+  .landing-footer-brandrow .brand-name small { margin-top: 7px; font-size: 13px; }
+  .landing-founder-note { max-width: 760px; padding: 28px 36px; }
+  .landing-founder-note .eyebrow { font-size: 11px; }
+  .landing-founder-note p { font-size: 17px; }
 }
